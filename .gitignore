@@ -4,3 +4,5 @@ gcloud-key.json
 *.DS_Store
 .DS_Store
 models/*
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
