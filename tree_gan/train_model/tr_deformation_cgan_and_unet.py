@@ -26,10 +26,13 @@ from utils import *
 import argparse
 parser = argparse.ArgumentParser()
 # data set type
+# change
 parser.add_argument('--dataset', type=str, default='acdc', choices=['acdc'])
 # no of training images
+# change
 parser.add_argument('--no_of_tr_imgs', type=str, default='tr3', choices=['tr1', 'tr3', 'tr5', 'tr15', 'tr40'])
 # combination of training images
+# change
 parser.add_argument('--comb_tr_imgs', type=str, default='c1', choices=['c1', 'c2', 'c3', 'c4', 'c5'])
 #learning rate of seg unet
 parser.add_argument('--lr_seg', type=float, default=0.001)
@@ -42,12 +45,14 @@ parser.add_argument('--lr_disc', type=float, default=0.0001)
 parser.add_argument('--z_lat_dim', type=int, default=100)
 
 # ra_en : 0 - disabled, 1 - enabled
+#D: not sure what ra_en does
 parser.add_argument('--ra_en', type=int, default=0)
 # select gan type
 parser.add_argument('--gan_type', type=str, default='gan', choices=['lsgan', 'gan', 'wgan-gp','ngan'])
 # beta value of Adam optimizer
 parser.add_argument('--beta_val', type=float, default=0.9)
 # to enable the representation of labels with 1 hot encoding
+# change ? maybe we don't want 1hot encoding and could change that here
 parser.add_argument('--en_1hot', type=float, default=1)
 
 # data aug enable : 0 - disabled, 1 - enabled
@@ -120,10 +125,10 @@ print('save_dir',save_dir)
 
 ######################################
 # load train and val images
-train_list = data_list.train_data(parse_config.no_of_tr_imgs,parse_config.comb_tr_imgs)
+# train_list = data_list.train_data(parse_config.no_of_tr_imgs,parse_config.comb_tr_imgs)
 #load train data cropped images directly
 print('loading train imgs')
-train_imgs,train_labels = dt.load_acdc_cropped_img_labels(train_list)
+train_imgs,train_labels = dt.load_acdc_cropped_img_labels()
 print(train_imgs.shape)
 if(parse_config.no_of_tr_imgs=='tr1'):
     train_imgs_copy=np.copy(train_imgs)

@@ -58,8 +58,8 @@ parser.add_argument('--data_aug_seg', type=int, default=1, choices=[0,1])
 parser.add_argument('--lamda_dsc', type=float, default=1)
 # adversarial loss term (lamda_adv)
 parser.add_argument('--lamda_adv', type=float, default=1)
-# for negative L1 loss on spatial transformation (per-pixel flow field/deformation field) term (lamda_l1_g)
-parser.add_argument('--lamda_l1_g', type=float, default=0.001)
+# for negative L1 loss on transformation (additive intensity field) term (lamda_l1_i)
+parser.add_argument('--lamda_l1_i', type=float, default=0.001)
 
 # version of run
 parser.add_argument('--ver', type=int, default=0)
@@ -75,6 +75,7 @@ if(parse_config.ra_en==1):
     parse_config.ra_en=True
 else:
     parse_config.ra_en=False
+
 
 if parse_config.dataset == 'acdc':
     #print('load acdc configs')
@@ -103,7 +104,7 @@ f1_util = f1_utilsObj(cfg,dt)
 
 ######################################
 #define save_dir for the model
-save_dir=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/tr_deformation_cgan_unet/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)+'/'
+save_dir=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/tr_intensity_cgan_unet/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)+'/'
 
 if(parse_config.data_aug_seg==0):
     save_dir=str(save_dir)+'no_data_aug/'
@@ -111,7 +112,7 @@ if(parse_config.data_aug_seg==0):
 else:
     save_dir=str(save_dir)+'with_data_aug/'
 
-save_dir=str(save_dir)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+'_lamda_g_'+str(parse_config.lamda_l1_g)+'/'+\
+save_dir=str(save_dir)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+'_lamda_i_'+str(parse_config.lamda_l1_i)+'/'+\
          str(parse_config.no_of_tr_imgs)+'/'+str(parse_config.comb_tr_imgs)+'_v'+str(parse_config.ver)+\
          '/unet_model_beta1_'+str(parse_config.beta_val)+'_lr_seg_'+str(parse_config.lr_seg)+'_lr_gen_'+str(parse_config.lr_gen)+'_lr_disc_'+str(parse_config.lr_disc)+'/'
 
@@ -121,10 +122,10 @@ print('save_dir',save_dir)
 ######################################
 # load train and val images
 train_list = data_list.train_data(parse_config.no_of_tr_imgs,parse_config.comb_tr_imgs)
-#load train data cropped images directly
+# load train data cropped images directly
 print('loading train imgs')
 train_imgs,train_labels = dt.load_acdc_cropped_img_labels(train_list)
-print(train_imgs.shape)
+
 if(parse_config.no_of_tr_imgs=='tr1'):
     train_imgs_copy=np.copy(train_imgs)
     train_labels_copy=np.copy(train_labels)
@@ -134,15 +135,14 @@ if(parse_config.no_of_tr_imgs=='tr1'):
     del train_imgs_copy,train_labels_copy
 
 val_list = data_list.val_data()
-#load both val data and its cropped images
+# load both val data and its cropped images
 print('loading val imgs')
 val_label_orig,val_img_crop,val_label_crop,pixel_val_list=load_val_imgs(val_list,dt,orig_img_dt)
 
-# # load unlabeled images
+# load unlabeled images
 unl_list = data_list.unlabeled_data()
 print('loading unlabeled imgs')
 unlabeled_imgs=dt.load_acdc_cropped_img_labels(unl_list,label_present=0)
-#print('unlabeled_imgs',unlabeled_imgs.shape)
 
 # get test list
 print('get test imgs list')
@@ -157,29 +157,28 @@ def get_samples(labeled_imgs,unlabeled_imgs):
     # sample z vectors from Gaussian Distribution
     z_samples = np.random.normal(loc=0.0, scale=1.0, size=(cfg.batch_size, parse_config.z_lat_dim)).astype(np.float32)
 
-    # sample Unlabeled data shuffled batch
+    #sample Unlabeled data shuffled batch
     unld_img_batch=shuffle_minibatch([unlabeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
 
-    # sample Labelled data shuffled batch
+    #sample Labelled data shuffled batch
     ld_img_batch=shuffle_minibatch([labeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
 
     return z_samples,ld_img_batch,unld_img_batch
 
 def plt_func(sess,ae,save_dir,z_samples,ld_img_batch,unld_img_batch,index=0):
-    # plot deformed images for an fixed input image and different per-pixel flow vectors generated from sampled z values
+    # plot intensity transformed images for an fixed input image and different sampled z values
     ld_img_tmp=np.zeros_like(ld_img_batch)
     # select one 2D image from the batch and apply different z's sampled over this selected image
     for i in range(0,20):
         ld_img_tmp[i,:,:,0]=ld_img_batch[index,:,:,0]
 
-    flow_vec,y_geo_deformed,z_cost=sess.run([ae['flow_vec'],ae['y_trans'],ae['z_cost']], feed_dict={ae['x_l']: ld_img_tmp, ae['z']:z_samples,\
+    int_vec,y_int_deformed,z_cost=sess.run([ae['int_c1'],ae['y_int'],ae['z_cost']], feed_dict={ae['x']: ld_img_tmp, ae['z']:z_samples,\
                           ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: False})
 
-    f1_util.plot_deformed_imgs(ld_img_tmp,y_geo_deformed,flow_vec,save_dir,index=index)
+    f1_util.plot_intensity_transformed_imgs(ld_img_tmp,y_int_deformed,int_vec,save_dir,index=index)
 
-    # Plot gif of all the deformed images generated for the fixed input image
-    f1_util.write_gif_func(ip_img=y_geo_deformed, imsize=(cfg.img_size_x,cfg.img_size_y),save_dir=save_dir,index=index)
-
+    # Plot gif of all the transformed images generated for the fixed input image
+    #f1_util.write_gif_func(ip_img=y_int_deformed, imsize=(cfg.img_size_x,cfg.img_size_y),save_dir=save_dir,index=index)
 
 ######################################
 # Define checkpoint file to save CNN architecture and learnt hyperparameters
@@ -189,11 +188,11 @@ best_model_dir=str(save_dir)+'best_model/'
 ######################################
 
 ######################################
-# Define deformation field generator model graph
-ae = model.spatial_generator_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_rate_disc=parse_config.lr_disc,\
+# Define additive intensity field generator model graph
+ae = model.intensity_transform_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_rate_disc=parse_config.lr_disc,\
                         beta1_val=parse_config.beta_val,gan_type=parse_config.gan_type,ra_en=parse_config.ra_en,\
                         learn_rate_seg=parse_config.lr_seg,dsc_loss=parse_config.dsc_loss,en_1hot=parse_config.en_1hot,\
-                        lamda_dsc=parse_config.lamda_dsc,lamda_adv=parse_config.lamda_adv,lamda_l1_g=parse_config.lamda_l1_g)
+                        lamda_dsc=parse_config.lamda_dsc,lamda_adv=parse_config.lamda_adv,lamda_l1_i=parse_config.lamda_l1_i)
 
 ######################################
 #  training parameters
@@ -204,12 +203,12 @@ print_step=2000
 # no of iterations to train just the segmentation network using the labeled data without any cGAN generated data
 seg_tr_limit=400
 mean_f1_val_prev=0.1
-threshold_f1=0.000001
+threshold_f1=0.00001
 pathlib.Path(best_model_dir).mkdir(parents=True, exist_ok=True)
 ######################################
 
 ######################################
-# define graph to compute deformed image given an per-pixel flow vector and input image
+# define graph to compute 1 hot encoding for an input label
 df_ae= model.deform_net()
 ######################################
 
@@ -238,8 +237,9 @@ for epoch_i in range(start_epoch,n_epochs):
     # sample Unlabeled shuffled batch
     unld_img_batch=shuffle_minibatch([unlabeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
 
-    # sample Labelled shuffled batch
+    # sample Labeled shuffled batch
     ld_img_batch,ld_label_batch=shuffle_minibatch([train_imgs,train_labels],batch_size=cfg.batch_size,num_channels=cfg.num_channels,axis=2)
+
     if(cfg.aug_en==1):
         # Apply affine transformations
         ld_img_batch,ld_label_batch=augmentation_function([ld_img_batch,ld_label_batch],dt)
@@ -252,24 +252,22 @@ for epoch_i in range(start_epoch,n_epochs):
     if(epoch_i>=seg_tr_limit):
         # sample the batch of images and apply deformation field generated by the Generator network on these which are used for the remaining 9500 epochs
         # Batch comprosed of both deformed image,label pairs and original affine transformed image, label pairs
+        # Here, the labels do not change on application of intensity transformation since it is an additive operation
         ld_label_batch_tmp=np.copy(ld_label_batch)
         ###########################
-        ## use Deformation field cGAN to generate additional augmented image,label pairs from labeled samples
-        flow_vec,ld_img_batch=sess.run([ae['flow_vec'],ae['y_trans']],\
-                                    feed_dict={ae['x_l']: ld_img_batch_tmp, ae['z']:z_samples, ae['train_phase']: False})
-
-        ld_label_batch=sess.run([df_ae['deform_y_1hot']],feed_dict={df_ae['y_tmp']:ld_label_batch,df_ae['flow_v']:flow_vec})
-        ld_label_batch=ld_label_batch[0]
+        # use additive intensity field cGAN to generate additional augmented image,label pairs from labeled samples
+        _,ld_img_batch=sess.run([ae['int_c1'],ae['y_int']],\
+                                    feed_dict={ae['x']: ld_img_batch_tmp, ae['z']:z_samples, ae['train_phase']: False})
+        ld_label_batch=ld_label_batch_1hot
 
         ###########################
-        #shuffle the quantity/number of images chosen from deformation cGAN augmented images and rest are original images with conventional affine transformations
+        # shuffle the quantity/number of images chosen from intensity field cGAN augmented images and rest are original images with conventional affine transformations
         no_orig=np.random.randint(5, high=15)
         ld_img_batch[0:no_orig] = ld_img_batch_tmp[0:no_orig]
         if(parse_config.en_1hot==1):
-            ld_label_batch[0:no_orig] = ld_label_batch_1hot[0:no_orig]
+            ld_label_batch = ld_label_batch_1hot
         else:
-            ld_label_batch = np.argmax(ld_label_batch,axis=3)
-            ld_label_batch[0:no_orig] = ld_label_batch_tmp[0:no_orig]
+            ld_label_batch = ld_label_batch_tmp
 
         #Pick equal number of images from each category
         # ld_img_batch[0:10]=ld_img_batch_tmp[0:10]
@@ -290,10 +288,11 @@ for epoch_i in range(start_epoch,n_epochs):
         #Optimize Generator (G), Discriminator (D) and Segmentation (S) networks for the remaining 9500 epochs
 
         # update both Generator and Segmentation Net parameters in the framework using total loss value
-        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_l2_both_gen_unet']], feed_dict={ae['x']: ld_img_batch,ae['x_l']: ld_img_batch,ae['y_l']: ld_label_batch,\
+        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_l2_both_gen_unet']], feed_dict={ae['x']: ld_img_batch,ae['y_l']: ld_label_batch,\
                                    ae['z']:z_samples, ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: True})
+
         # update Discriminator Net (D) parameters in the setup using only discriminator loss
-        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_disc']], feed_dict={ae['x']: ld_img_batch,ae['x_l']: ld_img_batch, ae['z']:z_samples,\
+        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_disc']], feed_dict={ae['x']: ld_img_batch,ae['z']:z_samples,\
                               ae['y_l']: ld_label_batch,ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: True})
 
     if(epoch_i%val_step_update==0):
@@ -319,10 +318,12 @@ for epoch_i in range(start_epoch,n_epochs):
             f1_arr.append(f1_val[1:cfg.num_classes])
 
         #avg mean over 2 val subjects
-        mean_f1_arr=np.asarray(mean_f1_arr)
-        mean_f1=np.mean(mean_f1_arr)
-        f1_arr=np.asarray(f1_arr)
+        mean_f1_arr = np.asarray(mean_f1_arr)
+        mean_f1 = np.mean(mean_f1_arr)
+        f1_arr = np.asarray(f1_arr)
 
+        if ((epoch_i%disp_step == 0) or (epoch_i==n_epochs-1)):
+            print('mean_f1',epoch_i, mean_f1)
         if (mean_f1-mean_f1_val_prev>threshold_f1 and epoch_i!=start_epoch):
             print("prev f1_val; present_f1_val", mean_f1_val_prev, mean_f1, mean_f1_arr)
             mean_f1_val_prev = mean_f1
@@ -334,8 +335,6 @@ for epoch_i in range(start_epoch,n_epochs):
         #calc. and save validation image dice summary
         dsc_summary_msg = sess.run(ae['val_dsc_summary'], feed_dict={ae['rv_dice']:np.mean(f1_arr[:,0]),\
                                 ae['myo_dice']:np.mean(f1_arr[:,1]),ae['lv_dice']:np.mean(f1_arr[:,2]),ae['mean_dice']: mean_f1})
-        val_sum_writer.add_summary(dsc_summary_msg, epoch_i)
-        val_sum_writer.flush()
 
     if ((epoch_i==n_epochs-1) and (epoch_i != start_epoch)):
         # model saved at last epoch
@@ -352,7 +351,7 @@ sess.close()
 saver_new = tf.train.Saver()
 sess_new = tf.Session(config=config)
 saver_new.restore(sess_new, mp_best)
-print("best model chkpt name",mp_best)
+print("best model chkpt",mp_best)
 print("Model restored")
 
 #########################
