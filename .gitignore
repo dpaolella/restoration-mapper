@@ -1,0 +1,12 @@
+*.pyc
+config.yaml
+*/data/*
+gcloud-key.json
+*.DS_Store
+.DS_Store
+models/*
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*/data_aug_seg/*
+*/__pycache__/*
+*/task_driven_data_augmentation/*

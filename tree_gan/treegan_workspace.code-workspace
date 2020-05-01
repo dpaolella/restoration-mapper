@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/cnn_unet/": true,
+			"**/task_driven_data_augmentation/": true
+		}
+	}
+}
