@@ -25,11 +25,11 @@ from utils import *
 
 import argparse
 parser = argparse.ArgumentParser()
-# data set type
+#data set type
 parser.add_argument('--dataset', type=str, default='acdc', choices=['acdc'])
-# no of training images
+#no of training images
 parser.add_argument('--no_of_tr_imgs', type=str, default='tr3', choices=['tr1', 'tr3', 'tr5', 'tr15', 'tr40'])
-# combination of training images
+#combination of training images
 parser.add_argument('--comb_tr_imgs', type=str, default='c1', choices=['c1', 'c2', 'c3', 'c4', 'c5'])
 #learning rate of seg unet
 parser.add_argument('--lr_seg', type=float, default=0.001)
@@ -50,19 +50,24 @@ parser.add_argument('--beta_val', type=float, default=0.9)
 # to enable the representation of labels with 1 hot encoding
 parser.add_argument('--en_1hot', type=float, default=1)
 
-# data aug enable : 0 - disabled, 1 - enabled
-parser.add_argument('--data_aug_seg', type=int, default=1, choices=[0,1])
-
 # lamda factors
 # for segmenation loss term (lamda_dsc)
 parser.add_argument('--lamda_dsc', type=float, default=1)
 # adversarial loss term (lamda_adv)
 parser.add_argument('--lamda_adv', type=float, default=1)
+### deformation field cGAN specific
 # for negative L1 loss on spatial transformation (per-pixel flow field/deformation field) term (lamda_l1_g)
 parser.add_argument('--lamda_l1_g', type=float, default=0.001)
 
-# version of run
+### Intensity field cGAN specific
+# for negative L1 loss on transformation (additive intensity field) term (lamda_l1_i)
+parser.add_argument('--lamda_l1_i', type=float, default=0.001)
+
+#version of run
 parser.add_argument('--ver', type=int, default=0)
+
+#data aug - 0 - disabled, 1 - enabled
+parser.add_argument('--data_aug_seg', type=int, default=1, choices=[0,1])
 
 # segmentation loss to optimize
 # 0 for weighted cross entropy, 1 for dice score loss
@@ -91,40 +96,41 @@ from dataloaders import dataloaderObj
 dt = dataloaderObj(cfg)
 
 if parse_config.dataset == 'acdc':
-    #print('set acdc orig img dataloader handle')
+    #print('set acdc img dataloader handle')
     orig_img_dt=dt.load_acdc_imgs
 
 #  load model object
 from models import modelObj
 model = modelObj(cfg)
+
 #  load f1_utils object
 from f1_utils import f1_utilsObj
 f1_util = f1_utilsObj(cfg,dt)
 
 ######################################
 #define save_dir for the model
-save_dir=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/tr_deformation_cgan_unet/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)+'/'
+proj_save_name='tr_deform_and_int_cgans_data_aug/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)
 
 if(parse_config.data_aug_seg==0):
-    save_dir=str(save_dir)+'no_data_aug/'
+    save_dir=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/'+str(proj_save_name)+'/no_data_aug/'
     cfg.aug_en=parse_config.data_aug_seg
 else:
-    save_dir=str(save_dir)+'with_data_aug/'
+    save_dir=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/'+str(proj_save_name)+'/with_data_aug/'
 
-save_dir=str(save_dir)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+'_lamda_g_'+str(parse_config.lamda_l1_g)+'/'+\
-         str(parse_config.no_of_tr_imgs)+'/'+str(parse_config.comb_tr_imgs)+'_v'+str(parse_config.ver)+\
-         '/unet_model_beta1_'+str(parse_config.beta_val)+'_lr_seg_'+str(parse_config.lr_seg)+'_lr_gen_'+str(parse_config.lr_gen)+'_lr_disc_'+str(parse_config.lr_disc)+'/'
-
+save_dir=str(save_dir)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+\
+         '_lamda_g_'+str(parse_config.lamda_l1_g)+'_lamda_i_'+str(parse_config.lamda_l1_i)+\
+         '/'+str(parse_config.no_of_tr_imgs)+'/'+str(parse_config.comb_tr_imgs)+'_v'+str(parse_config.ver)+'/unet_model_dsc_loss_'+str(parse_config.dsc_loss)+'_lr_seg_'+str(parse_config.lr_seg)+'/'
 print('save_dir',save_dir)
 ######################################
 
 ######################################
 # load train and val images
 train_list = data_list.train_data(parse_config.no_of_tr_imgs,parse_config.comb_tr_imgs)
+#print(train_list)
 #load train data cropped images directly
 print('loading train imgs')
 train_imgs,train_labels = dt.load_acdc_cropped_img_labels(train_list)
-print(train_imgs.shape)
+
 if(parse_config.no_of_tr_imgs=='tr1'):
     train_imgs_copy=np.copy(train_imgs)
     train_labels_copy=np.copy(train_labels)
@@ -134,15 +140,11 @@ if(parse_config.no_of_tr_imgs=='tr1'):
     del train_imgs_copy,train_labels_copy
 
 val_list = data_list.val_data()
+#print(val_list)
 #load both val data and its cropped images
 print('loading val imgs')
 val_label_orig,val_img_crop,val_label_crop,pixel_val_list=load_val_imgs(val_list,dt,orig_img_dt)
-
-# # load unlabeled images
-unl_list = data_list.unlabeled_data()
-print('loading unlabeled imgs')
-unlabeled_imgs=dt.load_acdc_cropped_img_labels(unl_list,label_present=0)
-#print('unlabeled_imgs',unlabeled_imgs.shape)
+#print(pixel_val_list)
 
 # get test list
 print('get test imgs list')
@@ -152,64 +154,94 @@ val_step_update=cfg.val_step_update
 ######################################
 
 ######################################
-
-def get_samples(labeled_imgs,unlabeled_imgs):
-    # sample z vectors from Gaussian Distribution
-    z_samples = np.random.normal(loc=0.0, scale=1.0, size=(cfg.batch_size, parse_config.z_lat_dim)).astype(np.float32)
-
-    # sample Unlabeled data shuffled batch
-    unld_img_batch=shuffle_minibatch([unlabeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
-
-    # sample Labelled data shuffled batch
-    ld_img_batch=shuffle_minibatch([labeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
-
-    return z_samples,ld_img_batch,unld_img_batch
-
-def plt_func(sess,ae,save_dir,z_samples,ld_img_batch,unld_img_batch,index=0):
-    # plot deformed images for an fixed input image and different per-pixel flow vectors generated from sampled z values
-    ld_img_tmp=np.zeros_like(ld_img_batch)
-    # select one 2D image from the batch and apply different z's sampled over this selected image
-    for i in range(0,20):
-        ld_img_tmp[i,:,:,0]=ld_img_batch[index,:,:,0]
-
-    flow_vec,y_geo_deformed,z_cost=sess.run([ae['flow_vec'],ae['y_trans'],ae['z_cost']], feed_dict={ae['x_l']: ld_img_tmp, ae['z']:z_samples,\
-                          ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: False})
-
-    f1_util.plot_deformed_imgs(ld_img_tmp,y_geo_deformed,flow_vec,save_dir,index=index)
-
-    # Plot gif of all the deformed images generated for the fixed input image
-    f1_util.write_gif_func(ip_img=y_geo_deformed, imsize=(cfg.img_size_x,cfg.img_size_y),save_dir=save_dir,index=index)
-
-
-######################################
 # Define checkpoint file to save CNN architecture and learnt hyperparameters
 checkpoint_filename='unet_'+str(parse_config.dataset)
 logs_path = str(save_dir)+'tensorflow_logs/'
 best_model_dir=str(save_dir)+'best_model/'
 ######################################
 
-######################################
-# Define deformation field generator model graph
-ae = model.spatial_generator_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_rate_disc=parse_config.lr_disc,\
+########################################################################
+#load deformation field generator net
+########################################################################
+# Define the model graph
+tf.reset_default_graph()
+ae_geo = model.spatial_generator_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_rate_disc=parse_config.lr_disc,\
                         beta1_val=parse_config.beta_val,gan_type=parse_config.gan_type,ra_en=parse_config.ra_en,\
                         learn_rate_seg=parse_config.lr_seg,dsc_loss=parse_config.dsc_loss,en_1hot=parse_config.en_1hot,\
                         lamda_dsc=parse_config.lamda_dsc,lamda_adv=parse_config.lamda_adv,lamda_l1_g=parse_config.lamda_l1_g)
+
+# define model path
+model_path=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/tr_deformation_cgan_unet/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)+'/'
+
+if(parse_config.data_aug_seg==0):
+    model_path=str(model_path)+'no_data_aug/'
+    cfg.aug_en=parse_config.data_aug_seg
+else:
+    model_path=str(model_path)+'with_data_aug/'
+
+model_path=str(model_path)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+'_lamda_g_'+str(parse_config.lamda_l1_g)+'/'+\
+         str(parse_config.no_of_tr_imgs)+'/'+str(parse_config.comb_tr_imgs)+'_v'+str(parse_config.ver)+\
+         '/unet_model_beta1_'+str(parse_config.beta_val)+'_lr_seg_'+str(parse_config.lr_seg)+'_lr_gen_'+str(parse_config.lr_gen)+'_lr_disc_'+str(parse_config.lr_disc)+'/'
+
+mp=get_max_chkpt_file(model_path)
+print('loading deformation field cGAN checkpoint file',mp)
+# create a session and load the parameters learned
+saver_geo = tf.train.Saver(max_to_keep=2)
+sess_geo = tf.Session(config=config)
+saver_geo.restore(sess_geo,mp)
+######################################
+
+########################################################################
+#load additive intensity field generator net
+########################################################################
+# Define the model graph
+tf.reset_default_graph()
+ae_int = model.intensity_transform_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_rate_disc=parse_config.lr_disc,\
+                        beta1_val=parse_config.beta_val,gan_type=parse_config.gan_type,ra_en=parse_config.ra_en,\
+                        learn_rate_seg=parse_config.lr_seg,dsc_loss=parse_config.dsc_loss,en_1hot=parse_config.en_1hot,\
+                        lamda_dsc=parse_config.lamda_dsc,lamda_adv=parse_config.lamda_adv,lamda_l1_i=parse_config.lamda_l1_i)
+
+# define model path
+model_path=str(cfg.base_dir)+'/models/'+str(parse_config.dataset)+'/tr_intensity_cgan_unet/ra_en_'+str(ra_en_val)+'_gantype_'+str(parse_config.gan_type)+'/'
+
+if(parse_config.data_aug_seg==0):
+    model_path=str(model_path)+'no_data_aug/'
+    cfg.aug_en=parse_config.data_aug_seg
+else:
+    model_path=str(model_path)+'with_data_aug/'
+
+model_path=str(model_path)+'lamda_dsc_'+str(parse_config.lamda_dsc)+'_lamda_adv_'+str(parse_config.lamda_adv)+'_lamda_i_'+str(parse_config.lamda_l1_i)+'/'+\
+         str(parse_config.no_of_tr_imgs)+'/'+str(parse_config.comb_tr_imgs)+'_v'+str(parse_config.ver)+\
+         '/unet_model_beta1_'+str(parse_config.beta_val)+'_lr_seg_'+str(parse_config.lr_seg)+'_lr_gen_'+str(parse_config.lr_gen)+'_lr_disc_'+str(parse_config.lr_disc)+'/'
+
+mp=get_max_chkpt_file(model_path)
+print('loading additive intensity field cGAN checkpoint file ',mp)
+# create a session and load the parameters learned
+saver_int = tf.train.Saver(max_to_keep=2)
+sess_int = tf.Session(config=config)
+saver_int.restore(sess_int,mp)
+
+######################################
 
 ######################################
 #  training parameters
 start_epoch=0
 n_epochs = 10000
-disp_step=400
-print_step=2000
-# no of iterations to train just the segmentation network using the labeled data without any cGAN generated data
-seg_tr_limit=400
+disp_step=500
 mean_f1_val_prev=0.1
-threshold_f1=0.000001
+threshold_f1=0.00001
+debug_en=0
 pathlib.Path(best_model_dir).mkdir(parents=True, exist_ok=True)
 ######################################
 
 ######################################
-# define graph to compute deformed image given an per-pixel flow vector and input image
+# define current graph - unet
+tf.reset_default_graph()
+ae = model.unet(learn_rate_seg=parse_config.lr_seg,en_1hot=parse_config.en_1hot,dsc_loss=parse_config.dsc_loss)
+######################################
+
+######################################
+# define deformations net for labels
 df_ae= model.deform_net()
 ######################################
 
@@ -235,66 +267,59 @@ for epoch_i in range(start_epoch,n_epochs):
     # sample z's from Gaussian Distribution
     z_samples = np.random.normal(loc=0.0, scale=1.0, size=(cfg.batch_size, parse_config.z_lat_dim)).astype(np.float32)
 
-    # sample Unlabeled shuffled batch
-    unld_img_batch=shuffle_minibatch([unlabeled_imgs],batch_size=int(cfg.batch_size),num_channels=cfg.num_channels,labels_present=0,axis=2)
-
-    # sample Labelled shuffled batch
+    #sample Labelled data shuffled batch
     ld_img_batch,ld_label_batch=shuffle_minibatch([train_imgs,train_labels],batch_size=cfg.batch_size,num_channels=cfg.num_channels,axis=2)
     if(cfg.aug_en==1):
         # Apply affine transformations
         ld_img_batch,ld_label_batch=augmentation_function([ld_img_batch,ld_label_batch],dt)
-        unld_img_batch=augmentation_function([unld_img_batch],dt,labels_present=0)
 
-    ld_img_batch_tmp=np.copy(ld_img_batch)
+    ld_img_batch_orig_tmp=np.copy(ld_img_batch)
+    ld_label_batch_orig_tmp=np.copy(ld_label_batch)
     # Compute 1 hot encoding of the segmentation mask labels
-    ld_label_batch_1hot = sess.run(df_ae['y_tmp_1hot'],feed_dict={df_ae['y_tmp']:ld_label_batch})
+    ld_label_batch_orig_1hot = sess.run(df_ae['y_tmp_1hot'],feed_dict={df_ae['y_tmp']:ld_label_batch_orig_tmp})
 
-    if(epoch_i>=seg_tr_limit):
-        # sample the batch of images and apply deformation field generated by the Generator network on these which are used for the remaining 9500 epochs
-        # Batch comprosed of both deformed image,label pairs and original affine transformed image, label pairs
-        ld_label_batch_tmp=np.copy(ld_label_batch)
-        ###########################
-        ## use Deformation field cGAN to generate additional augmented image,label pairs from labeled samples
-        flow_vec,ld_img_batch=sess.run([ae['flow_vec'],ae['y_trans']],\
-                                    feed_dict={ae['x_l']: ld_img_batch_tmp, ae['z']:z_samples, ae['train_phase']: False})
+    ############################
+    ## use Deformation field cGAN to generate additional augmented image,label pairs from labeled samples
+    flow_vec,ld_img_batch_geo=sess_geo.run([ae_geo['flow_vec'],ae_geo['y_trans']],\
+                                feed_dict={ae_geo['x_l']: ld_img_batch_orig_tmp, ae_geo['z']:z_samples, ae_geo['train_phase']: False})
 
-        ld_label_batch=sess.run([df_ae['deform_y_1hot']],feed_dict={df_ae['y_tmp']:ld_label_batch,df_ae['flow_v']:flow_vec})
-        ld_label_batch=ld_label_batch[0]
+    ld_label_batch_geo=sess.run([df_ae['deform_y_1hot']],feed_dict={df_ae['y_tmp']:ld_label_batch_orig_tmp,df_ae['flow_v']:flow_vec})
+    ld_label_batch_geo=ld_label_batch_geo[0]
 
-        ###########################
-        #shuffle the quantity/number of images chosen from deformation cGAN augmented images and rest are original images with conventional affine transformations
-        no_orig=np.random.randint(5, high=15)
-        ld_img_batch[0:no_orig] = ld_img_batch_tmp[0:no_orig]
-        if(parse_config.en_1hot==1):
-            ld_label_batch[0:no_orig] = ld_label_batch_1hot[0:no_orig]
-        else:
-            ld_label_batch = np.argmax(ld_label_batch,axis=3)
-            ld_label_batch[0:no_orig] = ld_label_batch_tmp[0:no_orig]
+    ############################
+    # use additive Intensity field cGAN to generate additional augmented image,label pairs from labeled samples
+    int_c1,ld_img_batch_int=sess_int.run([ae_int['int_c1'],ae_int['y_int']], feed_dict={ae_int['x']: ld_img_batch_orig_tmp, ae_int['z']:z_samples, ae_int['train_phase']: False})
+    ld_label_batch_int = ld_label_batch_orig_1hot
 
-        #Pick equal number of images from each category
-        # ld_img_batch[0:10]=ld_img_batch_tmp[0:10]
-        # ld_label_batch[0:10]=ld_label_batch_1hot[0:10]
+    ############################
+    # use additive intensity field cGAN over augmented images generated from deformation field cGAN to create augmented images \
+    # that have both spatial deformations and intensity transformations applied in them
+    ld_img_batch_geo_tmp=np.copy(ld_img_batch_geo)
+    int_c1,ld_img_batch_geo_int=sess_int.run([ae_int['int_c1'],ae_int['y_int']], feed_dict={ae_int['x']: ld_img_batch_geo_tmp, ae_int['z']:z_samples, ae_int['train_phase']: False})
+    ld_label_batch_geo_int = np.copy(ld_label_batch_geo)
 
-    elif(epoch_i<seg_tr_limit):
-        # sample only labeled data batches to optimize only Segmentation Network for initial 500 epochs
-        ld_img_batch=ld_img_batch
-        unld_img_batch=unld_img_batch
-        ld_label_batch=ld_label_batch_1hot
+    # shuffle the quantity/number of images chosen from 
+    # deformation field cGAN --> no_g,
+    # intensity field cGAN   --> no_i,
+    # both cGANs             --> no_b,
+    # and rest (batch_size - (no_g+no_i+no_b)) are original images with conventional affine transformations.
+    no_g=np.random.randint(1, high=5)
+    no_i=np.random.randint(5, high=10)
+    no_b=np.random.randint(10, high=15)
 
-    if(epoch_i<seg_tr_limit):
-        #Optimize only Segmentation Network for initial 500 epochs
-        train_summary,_ =sess.run([ae['seg_summary'],ae['optimizer_unet_seg']], feed_dict={ae['x']: ld_img_batch, ae['y_l']: ld_label_batch,\
-                                   ae['select_mask']: False, ae['train_phase']: True})
+    ld_img_batch=ld_img_batch_orig_tmp
+    ld_label_batch=ld_label_batch_orig_1hot
 
-    if(epoch_i>seg_tr_limit):
-        #Optimize Generator (G), Discriminator (D) and Segmentation (S) networks for the remaining 9500 epochs
+    ld_img_batch[0:no_g] = ld_img_batch_geo[0:no_g]
+    ld_label_batch[0:no_g] = ld_label_batch_geo[0:no_g]
+    ld_img_batch[no_g:no_i] = ld_img_batch_int[no_g:no_i]
+    ld_label_batch[no_g:no_i] = ld_label_batch_int[no_g:no_i]
+    ld_img_batch[no_i:no_b] = ld_img_batch_geo_int[no_i:no_b]
+    ld_label_batch[no_i:no_b] = ld_label_batch_geo_int[no_i:no_b]
 
-        # update both Generator and Segmentation Net parameters in the framework using total loss value
-        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_l2_both_gen_unet']], feed_dict={ae['x']: ld_img_batch,ae['x_l']: ld_img_batch,ae['y_l']: ld_label_batch,\
-                                   ae['z']:z_samples, ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: True})
-        # update Discriminator Net (D) parameters in the setup using only discriminator loss
-        train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_disc']], feed_dict={ae['x']: ld_img_batch,ae['x_l']: ld_img_batch, ae['z']:z_samples,\
-                              ae['y_l']: ld_label_batch,ae['x_unl']: unld_img_batch, ae['select_mask']: True, ae['train_phase']: True})
+    #Optimer over this batch of images
+    train_summary,_ =sess.run([ae['train_summary'],ae['optimizer_unet_seg']], feed_dict={ae['x']: ld_img_batch, ae['y_l']: ld_label_batch,\
+                               ae['select_mask']: False, ae['train_phase']: True})
 
     if(epoch_i%val_step_update==0):
         train_writer.add_summary(train_summary, epoch_i)
@@ -326,6 +351,7 @@ for epoch_i in range(start_epoch,n_epochs):
         if (mean_f1-mean_f1_val_prev>threshold_f1 and epoch_i!=start_epoch):
             print("prev f1_val; present_f1_val", mean_f1_val_prev, mean_f1, mean_f1_arr)
             mean_f1_val_prev = mean_f1
+
             # to save the best model with maximum dice score over the entire n_epochs
             print("best model saved at epoch no. ", epoch_i)
             mp_best = str(best_model_dir) + str(checkpoint_filename) + '_best_model_epoch_' + str(epoch_i) + '.ckpt'
@@ -352,18 +378,12 @@ sess.close()
 saver_new = tf.train.Saver()
 sess_new = tf.Session(config=config)
 saver_new.restore(sess_new, mp_best)
-print("best model chkpt name",mp_best)
+print("best model chkpt",mp_best)
 print("Model restored")
 
 #########################
 # To compute inference on test images on the model that yields best dice score on validation images
 f1_util.pred_segs_acdc_test_subjs(sess_new,ae,save_dir,orig_img_dt,test_list,struct_name)
-#########################
-# To plot the generated augmented images from the trained deformation cGAN
-for j in range(0,5):
-    z_samples,ld_img_batch,unld_img_batch=get_samples(train_imgs,unlabeled_imgs)
-    save_dir_tmp=str(save_dir)+'/ep_best_model/'
-    plt_func(sess_new,ae,save_dir_tmp,z_samples,ld_img_batch,unld_img_batch,index=j)
 ######################################
 # To compute inference on validation images on the best model
 save_dir_tmp=str(save_dir)+'/val_imgs/'
