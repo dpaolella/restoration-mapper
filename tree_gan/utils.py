@@ -252,39 +252,39 @@ def change_axis_img(ip_list, labels_present=1, def_axis_no=2, cat_axis=0):
         return mergedlist_img,mergedlist_labels
     else:
         return mergedlist_img
+#D: we will have to put back some of these validation data references
+# def load_val_imgs(dt,orig_img_dt):
+#     '''
+#     To load validation acdc images and labels,pixel resolution
+#     input params:
+#         val_list: list of validation patient ids of acdc data
+#         dt: dataloader object
+#         orig_img_dt: dataloader for the image
+#     returns:
+#         val_label_orig: returns list of labels without any preprocessing applied
+#         val_img_re: returns list of images post preprocess steps done
+#         val_label_re: returns list of labels post preprocess steps done
+#         pixel_val_list: returns list of pixel resolution values of original images
+#     '''
+#     val_label_orig=[]
+#     val_img_list=[]
+#     val_label_list=[]
+#     pixel_val_list=[]
 
-def load_val_imgs(val_list,dt,orig_img_dt):
-    '''
-    To load validation acdc images and labels,pixel resolution
-    input params:
-        val_list: list of validation patient ids of acdc data
-        dt: dataloader object
-        orig_img_dt: dataloader for the image
-    returns:
-        val_label_orig: returns list of labels without any preprocessing applied
-        val_img_re: returns list of images post preprocess steps done
-        val_label_re: returns list of labels post preprocess steps done
-        pixel_val_list: returns list of pixel resolution values of original images
-    '''
-    val_label_orig=[]
-    val_img_list=[]
-    val_label_list=[]
-    pixel_val_list=[]
+#     for val_id in val_list:
+#         val_id_list=[val_id]
+#         val_img,val_label,pixel_size_val=orig_img_dt(val_id_list)
+#         val_cropped_img,val_cropped_mask = dt.preprocess_data(val_img, val_label, pixel_size_val)
 
-    for val_id in val_list:
-        val_id_list=[val_id]
-        val_img,val_label,pixel_size_val=orig_img_dt(val_id_list)
-        val_cropped_img,val_cropped_mask = dt.preprocess_data(val_img, val_label, pixel_size_val)
+#         #change axis for quicker computation of dice score
+#         val_img_re,val_labels_re= change_axis_img([val_cropped_img,val_cropped_mask])
 
-        #change axis for quicker computation of dice score
-        val_img_re,val_labels_re= change_axis_img([val_cropped_img,val_cropped_mask])
+#         val_label_orig.append(val_label)
+#         val_img_list.append(val_img_re)
+#         val_label_list.append(val_labels_re)
+#         pixel_val_list.append(pixel_size_val)
 
-        val_label_orig.append(val_label)
-        val_img_list.append(val_img_re)
-        val_label_list.append(val_labels_re)
-        pixel_val_list.append(pixel_size_val)
-
-    return val_label_orig,val_img_list,val_label_list,pixel_val_list
+#     return val_label_orig,val_img_list,val_label_list,pixel_val_list
 
 def get_max_chkpt_file(model_path,min_ep=10):
     '''

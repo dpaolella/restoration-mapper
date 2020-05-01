@@ -130,29 +130,34 @@ print('save_dir',save_dir)
 print('loading train imgs')
 train_imgs,train_labels = dt.load_acdc_cropped_img_labels()
 print(train_imgs.shape)
-if(parse_config.no_of_tr_imgs=='tr1'):
-    train_imgs_copy=np.copy(train_imgs)
-    train_labels_copy=np.copy(train_labels)
-    while(train_imgs.shape[2]<cfg.batch_size):
-        train_imgs=np.concatenate((train_imgs,train_imgs_copy),axis=2)
-        train_labels=np.concatenate((train_labels,train_labels_copy),axis=2)
-    del train_imgs_copy,train_labels_copy
+#D: we might have to adjust this if our mini sample is too small compared to batch size
+# if(parse_config.no_of_tr_imgs=='tr1'):
+#     train_imgs_copy=np.copy(train_imgs)
+#     train_labels_copy=np.copy(train_labels)
+#     while(train_imgs.shape[2]<cfg.batch_size):
+#         train_imgs=np.concatenate((train_imgs,train_imgs_copy),axis=2)
+#         train_labels=np.concatenate((train_labels,train_labels_copy),axis=2)
+#     del train_imgs_copy,train_labels_copy
 
-val_list = data_list.val_data()
+#D: we will have to put back some of these validation data references
+#val_list = data_list.val_data()
 #load both val data and its cropped images
 print('loading val imgs')
-val_label_orig,val_img_crop,val_label_crop,pixel_val_list=load_val_imgs(val_list,dt,orig_img_dt)
+#val_label_orig,val_img_crop,val_label_crop,pixel_val_list=load_val_imgs(dt,orig_img_dt)
 
 # # load unlabeled images
-unl_list = data_list.unlabeled_data()
+#unl_list = data_list.unlabeled_data()
 print('loading unlabeled imgs')
-unlabeled_imgs=dt.load_acdc_cropped_img_labels(unl_list,label_present=0)
+unlabeled_imgs=dt.load_acdc_cropped_img_labels(label_present=0)
 #print('unlabeled_imgs',unlabeled_imgs.shape)
 
 # get test list
 print('get test imgs list')
-test_list = data_list.test_data()
-struct_name=cfg.struct_name
+#D: will have to add this back once test data created
+#test_list = data_list.test_data()
+#D: will have to figure out struct name in our case - it is used for computing the 
+# model performance, segmentation mask etc. in f1_util.pred_segs_acdc_test_subjs
+#struct_name=cfg.struct_name
 val_step_update=cfg.val_step_update
 ######################################
 
@@ -304,43 +309,43 @@ for epoch_i in range(start_epoch,n_epochs):
     if(epoch_i%val_step_update==0):
         train_writer.add_summary(train_summary, epoch_i)
         train_writer.flush()
+#D: we will have to put this back, but it requires working out the validation image structure
+    # if(epoch_i%val_step_update==0):
+    #     ##Save the model with best DSC for Validation Image
+    #     mean_f1_arr=[]
+    #     f1_arr=[]
+    #     for val_id_no in range(0,len(val_list)):
+    #         val_img_crop_tmp=val_img_crop[val_id_no]
+    #         val_label_crop_tmp=val_label_crop[val_id_no]
+    #         val_label_orig_tmp=val_label_orig[val_id_no]
+    #         pixel_size_val=pixel_val_list[val_id_no]
 
-    if(epoch_i%val_step_update==0):
-        ##Save the model with best DSC for Validation Image
-        mean_f1_arr=[]
-        f1_arr=[]
-        for val_id_no in range(0,len(val_list)):
-            val_img_crop_tmp=val_img_crop[val_id_no]
-            val_label_crop_tmp=val_label_crop[val_id_no]
-            val_label_orig_tmp=val_label_orig[val_id_no]
-            pixel_size_val=pixel_val_list[val_id_no]
+    #         # Compute segmentation mask and dice_score for each validation subject
+    #         pred_sf_mask = f1_util.calc_pred_sf_mask_full(sess, ae, val_img_crop_tmp)
+    #         re_pred_mask_sys,f1_val = f1_util.reshape_img_and_f1_score(pred_sf_mask, val_label_orig_tmp, pixel_size_val)
 
-            # Compute segmentation mask and dice_score for each validation subject
-            pred_sf_mask = f1_util.calc_pred_sf_mask_full(sess, ae, val_img_crop_tmp)
-            re_pred_mask_sys,f1_val = f1_util.reshape_img_and_f1_score(pred_sf_mask, val_label_orig_tmp, pixel_size_val)
+    #         #concatenate dice scores of each val image
+    #         mean_f1_arr.append(np.mean(f1_val[1:cfg.num_classes]))
+    #         f1_arr.append(f1_val[1:cfg.num_classes])
 
-            #concatenate dice scores of each val image
-            mean_f1_arr.append(np.mean(f1_val[1:cfg.num_classes]))
-            f1_arr.append(f1_val[1:cfg.num_classes])
+    #     #avg mean over 2 val subjects
+    #     mean_f1_arr=np.asarray(mean_f1_arr)
+    #     mean_f1=np.mean(mean_f1_arr)
+    #     f1_arr=np.asarray(f1_arr)
 
-        #avg mean over 2 val subjects
-        mean_f1_arr=np.asarray(mean_f1_arr)
-        mean_f1=np.mean(mean_f1_arr)
-        f1_arr=np.asarray(f1_arr)
+    #     if (mean_f1-mean_f1_val_prev>threshold_f1 and epoch_i!=start_epoch):
+    #         print("prev f1_val; present_f1_val", mean_f1_val_prev, mean_f1, mean_f1_arr)
+    #         mean_f1_val_prev = mean_f1
+    #         # to save the best model with maximum dice score over the entire n_epochs
+    #         print("best model saved at epoch no. ", epoch_i)
+    #         mp_best = str(best_model_dir) + str(checkpoint_filename) + '_best_model_epoch_' + str(epoch_i) + '.ckpt'
+    #         saver.save(sess, mp_best)
 
-        if (mean_f1-mean_f1_val_prev>threshold_f1 and epoch_i!=start_epoch):
-            print("prev f1_val; present_f1_val", mean_f1_val_prev, mean_f1, mean_f1_arr)
-            mean_f1_val_prev = mean_f1
-            # to save the best model with maximum dice score over the entire n_epochs
-            print("best model saved at epoch no. ", epoch_i)
-            mp_best = str(best_model_dir) + str(checkpoint_filename) + '_best_model_epoch_' + str(epoch_i) + '.ckpt'
-            saver.save(sess, mp_best)
-
-        #calc. and save validation image dice summary
-        dsc_summary_msg = sess.run(ae['val_dsc_summary'], feed_dict={ae['rv_dice']:np.mean(f1_arr[:,0]),\
-                                ae['myo_dice']:np.mean(f1_arr[:,1]),ae['lv_dice']:np.mean(f1_arr[:,2]),ae['mean_dice']: mean_f1})
-        val_sum_writer.add_summary(dsc_summary_msg, epoch_i)
-        val_sum_writer.flush()
+    #     #calc. and save validation image dice summary
+    #     dsc_summary_msg = sess.run(ae['val_dsc_summary'], feed_dict={ae['rv_dice']:np.mean(f1_arr[:,0]),\
+    #                             ae['myo_dice']:np.mean(f1_arr[:,1]),ae['lv_dice']:np.mean(f1_arr[:,2]),ae['mean_dice']: mean_f1})
+    #     val_sum_writer.add_summary(dsc_summary_msg, epoch_i)
+    #     val_sum_writer.flush()
 
     if ((epoch_i==n_epochs-1) and (epoch_i != start_epoch)):
         # model saved at last epoch
@@ -370,7 +375,8 @@ for j in range(0,5):
     save_dir_tmp=str(save_dir)+'/ep_best_model/'
     plt_func(sess_new,ae,save_dir_tmp,z_samples,ld_img_batch,unld_img_batch,index=j)
 ######################################
+#D: we will have to put back some of these validation data references
 # To compute inference on validation images on the best model
-save_dir_tmp=str(save_dir)+'/val_imgs/'
-f1_util.pred_segs_acdc_test_subjs(sess_new,ae,save_dir_tmp,orig_img_dt,val_list,struct_name)
+# save_dir_tmp=str(save_dir)+'/val_imgs/'
+# f1_util.pred_segs_acdc_test_subjs(sess_new,ae,save_dir_tmp,orig_img_dt,val_list,struct_name)
 ######################################

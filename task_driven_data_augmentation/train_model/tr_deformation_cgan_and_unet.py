@@ -125,6 +125,7 @@ train_list = data_list.train_data(parse_config.no_of_tr_imgs,parse_config.comb_t
 print('loading train imgs')
 train_imgs,train_labels = dt.load_acdc_cropped_img_labels(train_list)
 print(train_imgs.shape)
+print(type(train_imgs))
 if(parse_config.no_of_tr_imgs=='tr1'):
     train_imgs_copy=np.copy(train_imgs)
     train_labels_copy=np.copy(train_labels)

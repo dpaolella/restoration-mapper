@@ -9,14 +9,14 @@ interp_val=0 # 0 - bilinear interpolation; 1- nearest neighbour interpolation; 2
 # data dimensions, num of classes and resolution
 ################################################################
 # Image Dimensions
-img_size_x = 224
-img_size_y = 224
+img_size_x = 14 
+img_size_y = 14
 # Images are stored in one-dimensional arrays of this length.
 img_size_flat = img_size_x * img_size_y
 # Number of colour channels for the images: 1 channel for gray-scale image.
 num_channels = 1
 # Number of classes : # 0-background, 1-rv, 2-myo, 3-lv
-num_classes=4 
+num_classes=2 
 size=(img_size_x,img_size_y)
 target_resolution=(1.36719,1.36719)
 ################################################################

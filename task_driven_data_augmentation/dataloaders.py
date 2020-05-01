@@ -226,7 +226,9 @@ class dataloaderObj:
                     mask_cat=np.concatenate((mask_cat,mask_tmp),axis=2)
         if(label_present==1):
             print(img_cat.shape)
+            print(type(img_cat))
             print(mask_cat.shape)
+            print(type(mask_cat))
             return img_cat,mask_cat
         else:
             return img_cat
