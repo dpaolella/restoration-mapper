@@ -306,9 +306,10 @@ class modelObj:
 
         return loss
 
+#add inputs for class weights and number of channels
     def spatial_generator_cgan_unet(self,learn_rate_gen=0.0001,learn_rate_disc=0.0001,z_lat_dim=100,lat_dim=128,beta1_val=0.9,\
                      gan_type='gan',ra_en=True,learn_rate_seg=0.001,dsc_loss=1,en_1hot=0,lamda_dsc=1,lamda_adv=1,lamda_l1_g=1,
-                     class_weights = tf.constant([[0.05, 0.95]],name='class_weights')):
+                     class_weights = tf.constant([[0.05, 0.95]],name='class_weights'), num_channels=1):
 
 
         no_filters=[1, 16, 32, 64, 128, 256]
@@ -359,7 +360,6 @@ class modelObj:
         print("fcn_c3_weights: {}".format(fcn_c3_weights.shape))
         print("fcn_c3_biases: {}".format(fcn_c3_biases.shape))
 
-        num_channels=no_filters[0]
         # Placeholders
         # input to the network
         z = tf.placeholder(tf.float32, shape=[self.batch_size, z_lat_dim], name='z')

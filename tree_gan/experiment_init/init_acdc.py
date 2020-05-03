@@ -2,7 +2,8 @@
 # Variable definitions required for CNN graph
 ################################################################
 #Interpolation type and up scaling factor
-interp_val=0 # 0 - bilinear interpolation; 1- nearest neighbour interpolation; 2- Bicubic Interpolation
+#L: make this 1, same was that JB interpolates
+interp_val=1 # 0 - bilinear interpolation; 1- nearest neighbour interpolation; 2- Bicubic Interpolation
 ################################################################
 
 ################################################################
@@ -14,7 +15,8 @@ img_size_y = 16
 # Images are stored in one-dimensional arrays of this length.
 img_size_flat = img_size_x * img_size_y
 # Number of colour channels for the images: 1 channel for gray-scale image.
-num_channels = 1
+#L: set to 16
+num_channels = 16
 # Number of classes : # 0-background, 1-rv, 2-myo, 3-lv
 num_classes=2 
 size=(img_size_x,img_size_y)
