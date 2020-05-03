@@ -195,47 +195,7 @@ class dataloaderObj:
         else:
             return cropped_img
 
-    #D: removed the old function and created a new one
-    # def load_acdc_cropped_img_labels(self, train_ids_list,label_present=1):
-    #     """
-    #     # Load the already created and stored a-priori acdc data and its labels that are preprocessed and cropped to given dimensions
-    #     input params :
-    #         train_ids_list : patient ids of the image and label pairs to be loaded
-    #         label_present : to indicate if the image has labels provided or not (used for unlabeled images)
-    #     returns:
-    #         img_cat : stack of 3D images of all the patient id nos.
-    #         mask_cat : corresponding stack of 3D segmentation masks of all the patient id nos.
-    #     """
-
-    #     count=0
-    #     for study_id in train_ids_list:
-    #         #print("study_id",study_id)
-    #         img_fname = str(self.data_path_tr_cropped)+str(study_id)+'/img_cropped.npy'
-    #         img_tmp=np.load(img_fname)
-    #         if(label_present==1):
-    #             mask_fname = str(self.data_path_tr_cropped)+str(study_id)+'/mask_cropped.npy'
-    #             mask_tmp=np.load(mask_fname)
-
-    #         if(count==0):
-    #             img_cat=img_tmp
-    #             if(label_present==1):
-    #                 mask_cat=mask_tmp
-    #             count=1
-    #         else:
-    #             img_cat=np.concatenate((img_cat,img_tmp),axis=2)
-    #             if(label_present==1):
-    #                 mask_cat=np.concatenate((mask_cat,mask_tmp),axis=2)
-    #     if(label_present==1):
-    #         print(img_cat.shape)
-    #         print(type(img_cat))
-    #         print(mask_cat.shape)
-    #         print(type(mask_cat))
-    #         return img_cat,mask_cat
-    #     else:
-    #         return img_cat
-
-
-    def load_acdc_cropped_img_labels(self, label_present=1):
+    def load_imgs(self, val=False, label_present=1):
         """
         # Load the already created and stored a-priori acdc data and its labels that are preprocessed and cropped to given dimensions
         input params :
@@ -246,20 +206,21 @@ class dataloaderObj:
             mask_cat : corresponding stack of 3D segmentation masks of all the patient id nos.
         """
 
-        #D: changed
-        img_fname = str(self.data_path_tr_cropped)+'/lab_x_mini.npy'
+        if val==True:
+            img_type = 'val'
+        else:
+            img_type = 'lab'
+
+        img_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_x_mini.npy'
         img_tmp=np.load(img_fname)
         if(label_present==1):
-            mask_fname = str(self.data_path_tr_cropped)+'/lab_y_mini.npy'
+            mask_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_y_mini.npy'
             mask_tmp=np.load(mask_fname)
 
         if(label_present==1):
-            print(img_tmp.shape)
-            print(type(img_tmp))
-            print(mask_tmp.shape)
-            print(type(mask_tmp))
+            print('image shape: ', img_tmp.shape)
+            print('mask shape: ', mask_tmp.shape)
             return img_tmp,mask_tmp
         else:
+            print('image shape: ', img_tmp.shape)
             return img_tmp
-            print(img_tmp.shape)
-            print(type(img_tmp))

@@ -4,7 +4,8 @@ config.yaml
 gcloud-key.json
 *.DS_Store
 .DS_Store
-models/*
+tree_gan/models/best_model/*
+tree_gan/models/tensorflow_logs/*
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 */data_aug_seg/*
