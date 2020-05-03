@@ -197,9 +197,9 @@ class dataloaderObj:
 
     def load_imgs(self, val=False, label_present=1):
         """
-        # Load the already created and stored a-priori acdc data and its labels that are preprocessed and cropped to given dimensions
+        # Load the training or validation images
         input params :
-            train_ids_list : patient ids of the image and label pairs to be loaded
+            val : if TRUE, loads validation images. default value is False and loads labeled training images
             label_present : to indicate if the image has labels provided or not (used for unlabeled images)
         returns:
             img_cat : stack of 3D images of all the patient id nos.

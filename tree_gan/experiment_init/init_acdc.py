@@ -37,8 +37,8 @@ data_path_tr_cropped='data/gan_processed_data'
 ################################################################
 #network optimization parameters
 ################################################################
-#enable data augmentation
-aug_en=1
+# P: disable data augmentation
+aug_en=0
 #batch_size
 batch_size=20
 #L: only have one structure, tree/no tree, changed accordingly

@@ -149,6 +149,28 @@ def calc_deform(cfg, mu=0,sigma=10, order=3):
 
     return flow_vec
 
+# D: made a simpler minibatch function
+def random_minibatch(in_images, batch_size=20, labels_present=1):
+    '''
+    To sample a minibatch images of batch_size from all the available images.
+    input params:
+        in_array: list of images
+        batch_size: number of images to select for minibatch
+        labels_present: to indicate labels are used in 1-hot encoding format
+    '''
+    if(len(in_images)==2 and labels_present==1):
+        images = in_images[0]
+        labels = in_images[1]
+    else:
+        images = in_images[0]
+
+    out_images = images[:,:,:,np.random.randint(images.shape[3], size=batch_size)]
+    if(len(in_images)==2 and labels_present==1):
+        out_labels = labels[:,:,np.random.randint(images.shape[2], size=batch_size)]
+        return out_images, out_labels
+    else:
+        return out_images     
+
 def shuffle_minibatch(ip_list, batch_size=20,num_channels=1,labels_present=1,axis=2):
     '''
     To sample a minibatch images of batch_size from all the available 3D volume of images.
@@ -175,12 +197,15 @@ def shuffle_minibatch(ip_list, batch_size=20,num_channels=1,labels_present=1,axi
     img_size_z=image_data_train.shape[2]
 
     len_of_train_data=np.arange(image_data_train.shape[axis])
-
+    
     randomize=np.random.choice(len_of_train_data,size=len(len_of_train_data),replace=True)
-
+    print(num_channels)
     count=0
     for index_no in randomize:
         if(axis==2):
+            print(image_data_train.shape)
+            print(index_no, randomize)
+            print(image_data_train[:,:,index_no].shape)
             img_train_tmp=np.reshape(image_data_train[:,:,index_no],(1,img_size_x,img_size_y,num_channels))
             if(labels_present==1):
                 label_train_tmp=np.reshape(label_data_train[:,:,index_no],(1,img_size_x,img_size_y))

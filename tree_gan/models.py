@@ -179,7 +179,7 @@ class modelObj:
         seg_summary = tf.summary.scalar('seg_cost', tf.reduce_mean(seg_cost))
         # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
         train_summary = tf.summary.merge([seg_summary])
-        # For dice score summary
+        # For f1 score summary
         f1 = tf.placeholder(tf.float32, shape=[], name='f1')
         f1_summary = tf.summary.scalar('f1', f1)
 
@@ -709,7 +709,7 @@ class modelObj:
 
         train_summary = tf.summary.merge([z_summary,g_summary,flow_summary,g_a1_summary,g_a1_seg_summary])
 
-        # For dice score summary
+        # For f1 score summary
         f1 = tf.placeholder(tf.float32, shape=[], name='f1')
         f1_summary = tf.summary.scalar('rv_val_dice', f1)
 
@@ -1018,7 +1018,7 @@ class modelObj:
         #train_summary = tf.summary.merge([z_summary,g_summary,flow_summary])
         train_summary = tf.summary.merge([z_summary,g_summary,int_c1_summary,g_a1_summary,g_a1_seg_summary])
 
-        # For dice score summary
+        # For f1 score summary
         f1 = tf.placeholder(tf.float32, shape=[], name='f1')
         f1_summary = tf.summary.scalar('rv_val_dice', f1)
 
