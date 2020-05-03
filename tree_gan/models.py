@@ -442,32 +442,6 @@ class modelObj:
         ############################################
         ## Discriminator Network
         ############################################
-<<<<<<< HEAD
-
-        cat_disc_c1=tf.concat((y_trans,x_unl),axis=0,name='cat_disc_c1')
-
-        # Choose between concate or true+gen images or gen images
-        cat_disc_c1 = tf.cond(select_mask,lambda : cat_disc_c1, lambda :y_trans)
-
-        # DISC Net Architecutre
-        disc_c1 = layers.conv2d_layer(ip_layer=cat_disc_c1, name='disc_c1', num_filters=no_filters[1],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c1 = tf.nn.leaky_relu(disc_c1, alpha=0.2)
-
-        disc_c2 = layers.conv2d_layer(ip_layer=disc_c1, name='disc_c2', num_filters=no_filters[2],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c2 = tf.nn.leaky_relu(disc_c2, alpha=0.2)
-
-        disc_c3 = layers.conv2d_layer(ip_layer=disc_c2, name='disc_c3', num_filters=no_filters[3],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c3 = tf.nn.leaky_relu(disc_c3, alpha=0.2)
-
-        disc_c4 = layers.conv2d_layer(ip_layer=disc_c3, name='disc_c4', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c4 = tf.nn.leaky_relu(disc_c4, alpha=0.2)
-
-        disc_c5 = layers.conv2d_layer(ip_layer=disc_c4, name='disc_c5', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c5_pool = tf.nn.leaky_relu(disc_c5, alpha=0.2)
-
-        # Flat conv for FCN
-        flat_conv = tf.contrib.layers.flatten(disc_c5_pool)
-=======
         print("Discriminator Shapes")
         print("X unlabel")
         print(x_unl.shape)
@@ -505,7 +479,6 @@ class modelObj:
         # Flat conv for FCN
         flat_conv = tf.contrib.layers.flatten(disc_c2)
         print(flat_conv.shape)
->>>>>>> upstream/master
 
         # FCN + Relu - x2
         z_fcn_c1 = tf.matmul(flat_conv, fcn_c1_weights) + fcn_c1_biases
