@@ -27,9 +27,9 @@ val_step_update=10
 #base dir of network
 base_dir='data_aug_seg'
 #data path tr
-data_path_tr='data/training/patient'
+data_path_tr='data/training/training/patient'
 #cropped imgs data_path
-data_path_tr_cropped='data/training_cropped/patient'
+data_path_tr_cropped='data/cropped/patient/'
 ################################################################
 
 ################################################################
