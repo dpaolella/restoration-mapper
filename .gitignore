@@ -11,3 +11,4 @@ tree_gan/models/tensorflow_logs/*
 */data_aug_seg/*
 */__pycache__/*
 */task_driven_data_augmentation/*
+*/models*
