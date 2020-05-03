@@ -177,17 +177,10 @@ class modelObj:
         # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
         train_summary = tf.summary.merge([seg_summary])
         # For dice score summary
-        rv_dice = tf.placeholder(tf.float32, shape=[], name='rv_dice')
-        rv_dice_summary = tf.summary.scalar('rv_val_dice', rv_dice)
-        myo_dice = tf.placeholder(tf.float32, shape=[], name='myo_dice')
-        myo_dice_summary = tf.summary.scalar('myo_val_dice', myo_dice)
-        lv_dice = tf.placeholder(tf.float32, shape=[], name='lv_dice')
-        lv_dice_summary = tf.summary.scalar('lv_val_dice', lv_dice)
+        f1 = tf.placeholder(tf.float32, shape=[], name='f1')
+        f1_summary = tf.summary.scalar('f1', f1)
 
-        mean_dice = tf.placeholder(tf.float32, shape=[], name='mean_dice')
-        mean_dice_summary = tf.summary.scalar('mean_val_dice', mean_dice)
-
-        val_dsc_summary = tf.summary.merge([mean_dice_summary,rv_dice_summary,myo_dice_summary,lv_dice_summary])
+        val_f1_summary = tf.summary.merge([f1_summary])
 
         val_totalc = tf.placeholder(tf.float32, shape=[], name='val_totalc')
         val_totalc_sum= tf.summary.scalar('val_totalc_', val_totalc)
@@ -196,7 +189,7 @@ class modelObj:
         return {'x': x, 'y_l':y_l, 'train_phase':train_phase,'select_mask': select_mask,'seg_cost': cost_seg, \
                 'y_pred' : y_pred, 'y_pred_cls': y_pred_cls, 'optimizer_unet_seg':optimizer_unet_seg,\
                 'train_summary':train_summary,'seg_fin_layer':seg_fin_layer, \
-                'rv_dice':rv_dice,'myo_dice':myo_dice,'lv_dice':lv_dice,'mean_dice':mean_dice,'val_dsc_summary':val_dsc_summary,\
+                'f1':f1,'val_f1_summary':val_f1_summary,\
                 'val_totalc':val_totalc,'val_summary':val_summary}
 
     def discriminator_loss(self, Ra, loss_func, real, fake):
@@ -697,17 +690,10 @@ class modelObj:
         train_summary = tf.summary.merge([z_summary,g_summary,flow_summary,g_a1_summary,g_a1_seg_summary])
 
         # For dice score summary
-        rv_dice = tf.placeholder(tf.float32, shape=[], name='rv_dice')
-        rv_dice_summary = tf.summary.scalar('rv_val_dice', rv_dice)
-        myo_dice = tf.placeholder(tf.float32, shape=[], name='myo_dice')
-        myo_dice_summary = tf.summary.scalar('myo_val_dice', myo_dice)
-        lv_dice = tf.placeholder(tf.float32, shape=[], name='lv_dice')
-        lv_dice_summary = tf.summary.scalar('lv_val_dice', lv_dice)
+        f1 = tf.placeholder(tf.float32, shape=[], name='f1')
+        f1_summary = tf.summary.scalar('rv_val_dice', f1)
 
-        mean_dice = tf.placeholder(tf.float32, shape=[], name='mean_dice')
-        mean_dice_summary = tf.summary.scalar('mean_val_dice', mean_dice)
-
-        val_dsc_summary = tf.summary.merge([mean_dice_summary,rv_dice_summary,myo_dice_summary,lv_dice_summary])
+        val_f1_summary = tf.summary.merge([f1_summary])
 
         val_totalc = tf.placeholder(tf.float32, shape=[], name='val_totalc')
         val_totalc_sum= tf.summary.scalar('val_totalc_', val_totalc)
@@ -720,7 +706,7 @@ class modelObj:
         'optimizer_disc':optimizer_disc,'optimizer_l2_gen':optimizer_l2_gen,'optimizer_unet_seg' :optimizer_unet_seg, \
         'optimizer_l2_gen_seg':optimizer_l2_gen_seg,'seg_summary':seg_summary,\
         'optimizer_l2_both_gen_unet':optimizer_l2_both_gen_unet,\
-        'flow_vec':flow_vec,'rv_dice':rv_dice,'myo_dice':myo_dice,'lv_dice':lv_dice,'mean_dice':mean_dice,'val_dsc_summary':val_dsc_summary,\
+        'flow_vec':flow_vec,'f1':f1,'val_f1_summary':val_f1_summary,\
         'val_totalc':val_totalc,'val_summary':val_summary}
 
 
@@ -1013,17 +999,13 @@ class modelObj:
         train_summary = tf.summary.merge([z_summary,g_summary,int_c1_summary,g_a1_summary,g_a1_seg_summary])
 
         # For dice score summary
-        rv_dice = tf.placeholder(tf.float32, shape=[], name='rv_dice')
-        rv_dice_summary = tf.summary.scalar('rv_val_dice', rv_dice)
-        myo_dice = tf.placeholder(tf.float32, shape=[], name='myo_dice')
-        myo_dice_summary = tf.summary.scalar('myo_val_dice', myo_dice)
-        lv_dice = tf.placeholder(tf.float32, shape=[], name='lv_dice')
-        lv_dice_summary = tf.summary.scalar('lv_val_dice', lv_dice)
+        f1 = tf.placeholder(tf.float32, shape=[], name='f1')
+        f1_summary = tf.summary.scalar('rv_val_dice', f1)
 
         mean_dice = tf.placeholder(tf.float32, shape=[], name='mean_dice')
         mean_dice_summary = tf.summary.scalar('mean_val_dice', mean_dice)
 
-        val_dsc_summary = tf.summary.merge([mean_dice_summary,rv_dice_summary,myo_dice_summary,lv_dice_summary])
+        val_f1_summary = tf.summary.merge([f1_summary])
         val_totalc = tf.placeholder(tf.float32, shape=[], name='val_totalc')
         val_totalc_sum= tf.summary.scalar('val_totalc_', val_totalc)
         val_summary = tf.summary.merge([val_totalc_sum])
@@ -1037,6 +1019,6 @@ class modelObj:
                 'optimizer_l2_gen_seg':optimizer_l2_gen_seg,'seg_summary':seg_summary,\
                 'optimizer_l2_both_gen_unet':optimizer_l2_both_gen_unet,\
                 'int_c1':int_c1,'y_int':y_int,\
-                'rv_dice':rv_dice,'myo_dice':myo_dice,'lv_dice':lv_dice,'mean_dice':mean_dice,'val_dsc_summary':val_dsc_summary,\
+                'f1':f1,'val_f1_summary':val_f1_summary,\
                 'val_totalc':val_totalc,'val_summary':val_summary}
 
