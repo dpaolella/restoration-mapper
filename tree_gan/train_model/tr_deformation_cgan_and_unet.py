@@ -210,6 +210,7 @@ ae = model.spatial_generator_cgan_unet(learn_rate_gen=parse_config.lr_gen,learn_
 start_epoch=0
 n_epochs = 10000
 disp_step=400
+#D: print_step is not used anywhere - remove from our version
 print_step=2000
 # no of iterations to train just the segmentation network using the labeled data without any cGAN generated data
 seg_tr_limit=400
@@ -224,6 +225,8 @@ df_ae= model.deform_net()
 ######################################
 
 ######################################
+# D: The FileWriter class provides a mechanism to create an event file in a given directory and add summaries and events to it. The class updates the file contents asynchronously. This allows a training program to call methods to add data to the file directly from the training loop, without slowing down training.
+# http://tensorflow.biotecan.com/python/Python_1.8/tensorflow.google.cn/api_docs/python/tf/summary/FileWriter.html 
 #writer for train summary
 train_writer = tf.summary.FileWriter(logs_path)
 #writer for dice score and val summary
@@ -255,7 +258,10 @@ for epoch_i in range(start_epoch,n_epochs):
         ld_img_batch,ld_label_batch=augmentation_function([ld_img_batch,ld_label_batch],dt)
         unld_img_batch=augmentation_function([unld_img_batch],dt,labels_present=0)
 
+    #D: I am not sure why this is out here, but the copy of the ld_label_batch_tmp is inside the next if statement, 
+    # can we consolidate to one place to make it clearer?
     ld_img_batch_tmp=np.copy(ld_img_batch)
+     #D: for our implementation we should modify this to get rid of all the 1-hot logic
     # Compute 1 hot encoding of the segmentation mask labels
     ld_label_batch_1hot = sess.run(df_ae['y_tmp_1hot'],feed_dict={df_ae['y_tmp']:ld_label_batch})
 

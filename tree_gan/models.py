@@ -22,9 +22,12 @@ class modelObj:
     def deform_net(self):
         # placeholders for the network
         x_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 1], name='x_tmp')
+        #D: why does v_temp have 2 dimensions at the end ? ==> it's a requirement:
+        # http://tensorflow.biotecan.com/python/Python_1.8/tensorflow.google.cn/api_docs/python/tf/contrib/image/dense_image_warp.html
         v_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 2], name='v_tmp')
         y_tmp = tf.placeholder(tf.int32, shape=[self.batch_size, self.img_size_x, self.img_size_y], name='y_tmp')
-
+        #D: for our implementation we should modify this to not do the obe hot eoncoding
+        # that will require changing the dense_image_warp function to use a different order as well
         y_tmp_1hot = tf.one_hot(y_tmp,depth=self.num_classes)
         w_tmp = tf.contrib.image.dense_image_warp(image=x_tmp,flow=v_tmp,name='dense_image_warp_tmp')
         w_tmp_1hot = tf.contrib.image.dense_image_warp(image=y_tmp_1hot,flow=v_tmp,name='dense_image_warp_tmp_1hot')
@@ -207,6 +210,8 @@ class modelObj:
             #print("No exist [Ra + WGAN], so use the {} loss function".format(loss_func))
             Ra = False
 
+        #D: what does this whole bit about Ra change here? it still usese both real and fake images for the discrimnator, but 
+        # it does this bit here, which I am not sure what it is for...
         if Ra :
             real_logit = (real - tf.reduce_mean(fake))
             fake_logit = (fake - tf.reduce_mean(real))
@@ -437,6 +442,32 @@ class modelObj:
         ############################################
         ## Discriminator Network
         ############################################
+<<<<<<< HEAD
+
+        cat_disc_c1=tf.concat((y_trans,x_unl),axis=0,name='cat_disc_c1')
+
+        # Choose between concate or true+gen images or gen images
+        cat_disc_c1 = tf.cond(select_mask,lambda : cat_disc_c1, lambda :y_trans)
+
+        # DISC Net Architecutre
+        disc_c1 = layers.conv2d_layer(ip_layer=cat_disc_c1, name='disc_c1', num_filters=no_filters[1],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c1 = tf.nn.leaky_relu(disc_c1, alpha=0.2)
+
+        disc_c2 = layers.conv2d_layer(ip_layer=disc_c1, name='disc_c2', num_filters=no_filters[2],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c2 = tf.nn.leaky_relu(disc_c2, alpha=0.2)
+
+        disc_c3 = layers.conv2d_layer(ip_layer=disc_c2, name='disc_c3', num_filters=no_filters[3],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c3 = tf.nn.leaky_relu(disc_c3, alpha=0.2)
+
+        disc_c4 = layers.conv2d_layer(ip_layer=disc_c3, name='disc_c4', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c4 = tf.nn.leaky_relu(disc_c4, alpha=0.2)
+
+        disc_c5 = layers.conv2d_layer(ip_layer=disc_c4, name='disc_c5', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c5_pool = tf.nn.leaky_relu(disc_c5, alpha=0.2)
+
+        # Flat conv for FCN
+        flat_conv = tf.contrib.layers.flatten(disc_c5_pool)
+=======
         print("Discriminator Shapes")
         print("X unlabel")
         print(x_unl.shape)
@@ -474,6 +505,7 @@ class modelObj:
         # Flat conv for FCN
         flat_conv = tf.contrib.layers.flatten(disc_c2)
         print(flat_conv.shape)
+>>>>>>> upstream/master
 
         # FCN + Relu - x2
         z_fcn_c1 = tf.matmul(flat_conv, fcn_c1_weights) + fcn_c1_biases
@@ -589,12 +621,14 @@ class modelObj:
             # For dice score loss function
             #without background
             seg_cost = loss.dice_loss_without_backgrnd(logits=seg_fin_layer, labels=y_l_onehot)
+            #D: this seems like a totally unnecessary re-assignment of the variable here and is confusing
             seg_cost_wgtce = seg_cost
             #with background
             #seg_cost = dice_loss_with_backgrnd(logits=seg_fin_layer, labels=y_l_onehot)
         else:
             # For Weighted CE loss function
             seg_cost = loss.pixel_wise_cross_entropy_loss_weighted(logits=seg_fin_layer, labels=y_l_onehot, class_weights=class_weights)
+            #D: this seems like a totally unnecessary re-assignment of the variable here and is confusing
             seg_cost_wgtce = seg_cost
 
         # get the var list for Segmentation Network
@@ -610,15 +644,23 @@ class modelObj:
         with tf.control_dependencies(update_ops):
 
             cost_a1=-lamda_l1_g*tf.reduce_mean(tf.abs(tf.layers.flatten(flow_vec))) + lamda_adv*tf.reduce_mean(g_cost)
+            #D: this should be renamed from cost_a1_seg, because it is not the segmenter's cost, but the generator's loss
+            # when the segmenter is also chained in
             cost_a1_seg=cost_a1+lamda_dsc*tf.reduce_mean(seg_cost_wgtce)
 
+            #D: loss and optimization step for generator when the full chain is on all the way to segmenter
             optimizer_l2_gen_seg = tf.train.AdamOptimizer(learning_rate=learn_rate_gen,beta1=beta1_val).minimize(cost_a1_seg, var_list=gen_net_vars)
-            optimizer_l2_gen = tf.train.AdamOptimizer(learning_rate=learn_rate_gen,beta1=beta1_val).minimize(cost_a1, var_list=gen_net_vars)
             optimizer_l2_both_gen_unet = tf.train.AdamOptimizer(learning_rate=learn_rate_gen,beta1=beta1_val).minimize(cost_a1_seg, var_list=gen_net_vars+seg_net_vars)
+            
+            #D: this is the loss and optimization step for the Generator if only the GAN is being trained (w/o the Segmenter)
+            optimizer_l2_gen = tf.train.AdamOptimizer(learning_rate=learn_rate_gen,beta1=beta1_val).minimize(cost_a1, var_list=gen_net_vars)
+            
 
+            #D: discrimnator loss and optimization step
             cost_a2=tf.reduce_mean(z_cost)
             optimizer_disc = tf.train.AdamOptimizer(learning_rate=learn_rate_disc,beta1=beta1_val).minimize(cost_a2, var_list=disc_net_vars)
 
+            #D: segmenter loss and optimization step
             cost_a1_seg_loss=tf.reduce_mean(seg_cost)
             optimizer_unet_seg = tf.train.AdamOptimizer(learn_rate_seg).minimize(cost_a1_seg_loss,var_list=seg_net_vars)
 

@@ -7,7 +7,7 @@ import random
 import os
 import re
 
-
+#D: we could get rid of the references to en_1hot as our data isn't 1hot encoded and they also don't use it
 def augmentation_function(ip_list, dt, labels_present=1, en_1hot=0):
     '''
     To generate affine augmented image,label pairs.
@@ -67,6 +67,8 @@ def augmentation_function(ip_list, dt, labels_present=1, en_1hot=0):
                     lbl = scipy.ndimage.interpolation.rotate(lbl, reshape=False, angle=random_angle, axes=(1, 0),order=0)
 
         # RANDOM SCALE
+        #D: we will have to adjust this probably for multichannel images by setting multichannel = True
+        # https://scikit-image.org/docs/dev/api/skimage.transform.html#skimage.transform.rescale 
         if do_scaleaug:
             n_x, n_y = img.shape
             #scale factor between 0.9 and 1.1
