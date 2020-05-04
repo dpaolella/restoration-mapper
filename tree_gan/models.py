@@ -19,6 +19,24 @@ class modelObj:
         self.img_size_flat=cfg.img_size_flat
         self.batch_size=cfg.batch_size
 
+#new clipped deform net for 16x16->14x14
+    def deform_netclip(self):
+        # placeholders for the network
+        x_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 1], name='x_tmp')
+        #D: why does v_temp have 2 dimensions at the end ? ==> it's a requirement:
+        # http://tensorflow.biotecan.com/python/Python_1.8/tensorflow.google.cn/api_docs/python/tf/contrib/image/dense_image_warp.html
+        v_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 2], name='v_tmp')
+        y_tmp = tf.placeholder(tf.int32, shape=[self.batch_size, self.img_size_x-2, self.img_size_y-2], name='y_tmp')
+        #D: for our implementation we should modify this to not do the obe hot eoncoding
+        # that will require changing the dense_image_warp function to use a different order as well
+        y_tmp_1hot = tf.one_hot(y_tmp,depth=self.num_classes)
+        #L: clip the flow vector to 14x14, 0.875 is the fraction of 14/16
+        clp_v = tf.compat.v1.image.central_crop(v_tmp, .875)
+        w_tmp = tf.contrib.image.dense_image_warp(image=x_tmp,flow=v_tmp,name='dense_image_warp_tmp')
+        w_tmp_1hot = tf.contrib.image.dense_image_warp(image=y_tmp_1hot,flow=clp_v,name='dense_image_warp_tmp_1hot')
+
+        return {'x_tmp':x_tmp,'flow_v':v_tmp,'deform_x':w_tmp,'y_tmp':y_tmp,'y_tmp_1hot':y_tmp_1hot,'deform_y_1hot':w_tmp_1hot}        
+
     def deform_net(self):
         # placeholders for the network
         x_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 1], name='x_tmp')
@@ -373,10 +391,11 @@ class modelObj:
         print("x_unl: {}".format(x_unl.shape))
         
         #L: looks like we can turn off one-hot encoding here
+        #L: add -2
         if(en_1hot==1):
-            y_l = tf.placeholder(tf.float32, shape=[None, self.img_size_x, self.img_size_y,self.num_classes], name='y_l')
+            y_l = tf.placeholder(tf.float32, shape=[None, self.img_size_x-2, self.img_size_y-2,self.num_classes], name='y_l')
         else:
-            y_l = tf.placeholder(tf.int32, shape=[None, self.img_size_x, self.img_size_y], name='y_l')
+            y_l = tf.placeholder(tf.int32, shape=[None, self.img_size_x-2, self.img_size_y-2], name='y_l')
         select_mask = tf.placeholder(tf.bool, name='select_mask')
         train_phase = tf.placeholder(tf.bool, name='train_phase')
         if(en_1hot==0):
@@ -641,7 +660,8 @@ class modelObj:
         print("seg_c1_c: {}".format(seg_c1_c.shape))
 
         # Final output layer - Logits before softmax
-        seg_fin_layer = layers.conv2d_layer(ip_layer=seg_c1_c,name='seg_fin_layer', num_filters=self.num_classes,use_relu=False, use_batch_norm=False, training_phase=train_phase)
+        # add valid padding to get down to 14x14
+        seg_fin_layer = layers.conv2d_layer(ip_layer=seg_c1_c,name='seg_fin_layer', num_filters=self.num_classes, padding = "VALID",use_relu=False, use_batch_norm=False, training_phase=train_phase)
         print("seg_fin_layer: {}".format(seg_fin_layer.shape))
 
         # Predict Class
