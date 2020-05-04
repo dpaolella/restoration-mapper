@@ -711,7 +711,7 @@ class modelObj:
 
         # For f1 score summary
         f1 = tf.placeholder(tf.float32, shape=[], name='f1')
-        f1_summary = tf.summary.scalar('rv_val_dice', f1)
+        f1_summary = tf.summary.scalar('f1', f1)
 
         val_f1_summary = tf.summary.merge([f1_summary])
 
@@ -1020,7 +1020,7 @@ class modelObj:
 
         # For f1 score summary
         f1 = tf.placeholder(tf.float32, shape=[], name='f1')
-        f1_summary = tf.summary.scalar('rv_val_dice', f1)
+        f1_summary = tf.summary.scalar('f1', f1)
 
         mean_dice = tf.placeholder(tf.float32, shape=[], name='mean_dice')
         mean_dice_summary = tf.summary.scalar('mean_val_dice', mean_dice)

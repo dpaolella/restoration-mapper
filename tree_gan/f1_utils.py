@@ -4,6 +4,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
 import nibabel as nib
 
 #to make directories
@@ -177,6 +178,22 @@ class f1_utilsObj:
         f1_val= f1_score(y_true, y_pred, average=None)
 
         return f1_val
+
+    def calc_accuracy(self,predictions_mask,gt_mask):
+        '''
+        to compute accuracy
+        input params:
+            predictions_arr: predicted segmentation mask
+            mask: ground truth mask
+        returns:
+            acc: accuracy
+        '''
+        y_pred= predictions_mask.flatten()
+        y_true= gt_mask.flatten()
+
+        acc= accuracy_score(y_true, y_pred)
+
+        return acc
 
 
     def pred_segs_acdc_test_subjs(self, sess,ae, save_dir,orig_img_dt,test_list,struct_name,print_assd_hd_scores=0):
