@@ -1,6 +1,7 @@
 import numpy as np
 #from sklearn.metrics import f1_score
-import nibabel as nib
+#D: this is some package for meidcal images, so getting rid of it
+#import nibabel as nib
 import os
 
 #to make directories

@@ -27,11 +27,15 @@ class modelObj:
         # http://tensorflow.biotecan.com/python/Python_1.8/tensorflow.google.cn/api_docs/python/tf/contrib/image/dense_image_warp.html
         v_tmp = tf.placeholder(tf.float32, shape=[self.batch_size, self.img_size_x, self.img_size_y, 2], name='v_tmp')
         y_tmp = tf.placeholder(tf.int32, shape=[self.batch_size, self.img_size_x-2, self.img_size_y-2], name='y_tmp')
+        #print(v_tmp.shape)
         #D: for our implementation we should modify this to not do the obe hot eoncoding
         # that will require changing the dense_image_warp function to use a different order as well
         y_tmp_1hot = tf.one_hot(y_tmp,depth=self.num_classes)
         #L: clip the flow vector to 14x14, 0.875 is the fraction of 14/16
         clp_v = tf.compat.v1.image.central_crop(v_tmp, .875)
+        #clp_v = v_tmp[self.batch_size, 1:self.img_size_x-1, 1:self.img_size_y-1, 2]
+        #print(clp_v.shape)
+        #D: note this peculiarity that w_tmp takes input x_tmp
         w_tmp = tf.contrib.image.dense_image_warp(image=x_tmp,flow=v_tmp,name='dense_image_warp_tmp')
         w_tmp_1hot = tf.contrib.image.dense_image_warp(image=y_tmp_1hot,flow=clp_v,name='dense_image_warp_tmp_1hot')
 
@@ -447,9 +451,10 @@ class modelObj:
         #print("gen_up1: {}".format(gen_up1.shape))
         #print("gen_c1: {}".format(gen_c1.shape))
 
+        # no_filters=[1, 16, 32, 64, 128, 256]
         # Conv. ops on input image
-        conv_1a = layers.conv2d_layer(ip_layer=x_l,name='conv_1a',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        conv_1b = layers.conv2d_layer(ip_layer=conv_1a,name='conv_1b',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1a = layers.conv2d_layer(ip_layer=x_l,name='conv_1a',num_filters=32, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1b = layers.conv2d_layer(ip_layer=conv_1a,name='conv_1b',num_filters=64, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         print("conv_1a: {}".format(conv_1a.shape))
         print("conv_1b: {}".format(conv_1b.shape))
 
@@ -458,8 +463,8 @@ class modelObj:
         print("gen_cat: {}".format(gen_cat.shape))
 
         # More Conv. ops on concatenated feature maps
-        conv_1c = layers.conv2d_layer(ip_layer=gen_cat,name='conv_1c',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        conv_1d = layers.conv2d_layer(ip_layer=conv_1c,name='conv_1d',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1c = layers.conv2d_layer(ip_layer=gen_cat,name='conv_1c',num_filters=32, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1d = layers.conv2d_layer(ip_layer=conv_1c,name='conv_1d',num_filters=16, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         conv_1e = layers.conv2d_layer(ip_layer=conv_1d,name='conv_1e',num_filters=2, use_relu=False, use_batch_norm=False, training_phase=train_phase)
         print("conv_1c: {}".format(conv_1c.shape))
         print("conv_1d: {}".format(conv_1d.shape))
@@ -682,7 +687,8 @@ class modelObj:
             #seg_cost = dice_loss_with_backgrnd(logits=seg_fin_layer, labels=y_l_onehot)
         else:
             # For Weighted CE loss function
-            seg_cost = loss.pixel_wise_cross_entropy_loss_weighted(logits=seg_fin_layer, labels=y_l_onehot, class_weights=class_weights)
+            #seg_cost = loss.pixel_wise_cross_entropy_loss_weighted(logits=seg_fin_layer, labels=y_l_onehot, class_weights=class_weights)
+            seg_cost = loss.pixel_wise_cross_entropy_loss(logits=seg_fin_layer, labels=y_l_onehot)
             #D: this seems like a totally unnecessary re-assignment of the variable here and is confusing
             seg_cost_wgtce = seg_cost
 
@@ -698,6 +704,7 @@ class modelObj:
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
 
+            #D: this is the loss of the Generator (without the segmenter) = equation 5 in the paper
             cost_a1=-lamda_l1_g*tf.reduce_mean(tf.abs(tf.layers.flatten(flow_vec))) + lamda_adv*tf.reduce_mean(g_cost)
             #D: this should be renamed from cost_a1_seg, because it is not the segmenter's cost, but the generator's loss
             # when the segmenter is also chained in
@@ -740,7 +747,7 @@ class modelObj:
         val_summary = tf.summary.merge([val_totalc_sum])
 
         return {'x': x, 'z':z, 'y_l':y_l, 'train_phase':train_phase, 'seg_cost': seg_cost,\
-        'x_l':x_l,'x_unl':x_unl,'select_mask': select_mask,'z_cost':cost_a2,'g_cost':cost_a1,'g_net_cost':cost_a1_seg,\
+        'x_l':x_l,'x_unl':x_unl,'select_mask': select_mask,'z_cost':cost_a2,'cost_a1':cost_a1,'cost_a1_seg': cost_a1_seg,'g_net_cost':cost_a1_seg,\
         'y_pred' : y_pred, 'y_pred_cls': y_pred_cls,\
         'train_summary':train_summary,'y_trans':y_trans,'z_class':z_class,'z_pred':z_pred,'z_pred_cls':z_pred_cls,\
         'optimizer_disc':optimizer_disc,'optimizer_l2_gen':optimizer_l2_gen,'optimizer_unet_seg' :optimizer_unet_seg, \

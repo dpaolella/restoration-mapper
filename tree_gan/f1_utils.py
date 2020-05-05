@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
-import nibabel as nib
+#import nibabel as nib
 
 #to make directories
 import pathlib
