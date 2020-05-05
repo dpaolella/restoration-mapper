@@ -7,6 +7,8 @@ import random
 import os
 import re
 
+import math
+
 #D: we could get rid of the references to en_1hot as our data isn't 1hot encoded and they also don't use it
 def augmentation_function(ip_list, dt, labels_present=1, en_1hot=0):
     '''
@@ -149,8 +151,25 @@ def calc_deform(cfg, mu=0,sigma=10, order=3):
 
     return flow_vec
 
+def unison_shuffled_copies(a, b):
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
+
+def split_batches(in_images, batch_size):
+    batches = []
+    n_batches = math.floor(len(in_images)/batch_size+0.5)
+    for i in range(n_batches):
+        if((i+1)*batch_size<=len(in_images)):
+            batch = in_images[i*batch_size:(i+1)*batch_size]
+            batches.append(batch)
+        else:
+            batch = in_images[i*batch_size:]
+            batches.append(batch)
+    return batches
+
 # D: made a simpler minibatch function
-def random_minibatch(in_images, batch_size=20, labels_present=1):
+def shuffle_minibatch(in_images, batch_size=20, labels_present=1):
     '''
     To sample a minibatch images of batch_size from all the available images.
     input params:
@@ -161,79 +180,81 @@ def random_minibatch(in_images, batch_size=20, labels_present=1):
     if(len(in_images)==2 and labels_present==1):
         images = in_images[0]
         labels = in_images[1]
+        shuffled_images, shuffled_labels = unison_shuffled_copies(images, labels)
     else:
         images = in_images[0]
+        shuffled_images = images[np.random.permutation(len(images))]
 
-    out_images = images[:,:,:,np.random.randint(images.shape[3], size=batch_size)]
+    batched_images = split_batches(shuffled_images, batch_size)
     if(len(in_images)==2 and labels_present==1):
-        out_labels = labels[:,:,np.random.randint(images.shape[2], size=batch_size)]
-        return out_images, out_labels
+        batched_labels = split_batches(shuffled_labels, batch_size)
+        return batched_images, batched_labels
     else:
-        return out_images     
+        return batched_images 
 
-def shuffle_minibatch(ip_list, batch_size=20,num_channels=1,labels_present=1,axis=2):
-    '''
-    To sample a minibatch images of batch_size from all the available 3D volume of images.
+# def shuffle_minibatch(ip_list, batch_size=20,num_channels=1,labels_present=1,axis=2):
+#     '''
+#     To sample a minibatch images of batch_size from all the available 3D volume of images.
 
-    input params:
-        ip_list: list of 2D slices of images and its labels if labels are present
-        batch_size: number of 2D slices to consider for the training
-        labels_present: to indicate labels are used in 1-hot encoding format
-        num_channels : no of channels of the input image
-        axis : the axis along which we want to sample the minibatch -> axis vals : 0 - for sagittal, 1 - for coronal, 2 - for axial
-    returns:
-        image_data_train_batch: concatenated 2D slices randomly chosen from the total input data
-        label_data_train_batch: concatenated 2D slices of labels with indices corresponding to the input data selected.
-    '''
+#     input params:
+#         ip_list: list of 2D slices of images and its labels if labels are present
+#         batch_size: number of 2D slices to consider for the training
+#         labels_present: to indicate labels are used in 1-hot encoding format
+#         num_channels : no of channels of the input image
+#         axis : the axis along which we want to sample the minibatch -> axis vals : 0 - for sagittal, 1 - for coronal, 2 - for axial
+#     returns:
+#         image_data_train_batch: concatenated 2D slices randomly chosen from the total input data
+#         label_data_train_batch: concatenated 2D slices of labels with indices corresponding to the input data selected.
+#     '''
 
-    if(len(ip_list)==2 and labels_present==1):
-        image_data_train = ip_list[0]
-        label_data_train = ip_list[1]
-    else:
-        image_data_train=ip_list[0]
+#     if(len(ip_list)==2 and labels_present==1):
+#         image_data_train = ip_list[0]
+#         label_data_train = ip_list[1]
+#     else:
+#         image_data_train=ip_list[0]
 
-    img_size_x=image_data_train.shape[0]
-    img_size_y=image_data_train.shape[1]
-    img_size_z=image_data_train.shape[2]
+#     img_size_x=image_data_train.shape[0]
+#     img_size_y=image_data_train.shape[1]
+#     img_size_z=image_data_train.shape[2]
 
-    len_of_train_data=np.arange(image_data_train.shape[axis])
+#     len_of_train_data=np.arange(image_data_train.shape[axis])
     
-    randomize=np.random.choice(len_of_train_data,size=len(len_of_train_data),replace=True)
-    print(num_channels)
-    count=0
-    for index_no in randomize:
-        if(axis==2):
-            print(image_data_train.shape)
-            print(index_no, randomize)
-            print(image_data_train[:,:,index_no].shape)
-            img_train_tmp=np.reshape(image_data_train[:,:,index_no],(1,img_size_x,img_size_y,num_channels))
-            if(labels_present==1):
-                label_train_tmp=np.reshape(label_data_train[:,:,index_no],(1,img_size_x,img_size_y))
-        elif(axis==1):
-            img_train_tmp=np.reshape(image_data_train[:,index_no,:,],(1,img_size_x,img_size_z,num_channels))
-            if(labels_present==1):
-                label_train_tmp=np.reshape(label_data_train[:,index_no,:],(1,img_size_x,img_size_z))
-        else:
-            img_train_tmp=np.reshape(image_data_train[index_no,:,:],(1,img_size_y,img_size_z,num_channels))
-            if(labels_present==1):
-                label_train_tmp=np.reshape(label_data_train[index_no,:,:],(1,img_size_y,img_size_z))
+#     randomize=np.random.choice(len_of_train_data,size=len(len_of_train_data),replace=True)
+#     print(num_channels)
+#     count=0
+#     for index_no in randomize:
+#         if(axis==2):
+#             print(image_data_train.shape)
+#             print(index_no, randomize)
+#             print(image_data_train[:,:,index_no].shape)
+#             img_train_tmp=np.reshape(image_data_train[:,:,index_no],(1,img_size_x,img_size_y,num_channels))
+#             if(labels_present==1):
+#                 label_train_tmp=np.reshape(label_data_train[:,:,index_no],(1,img_size_x,img_size_y))
+#         elif(axis==1):
+#             img_train_tmp=np.reshape(image_data_train[:,index_no,:,],(1,img_size_x,img_size_z,num_channels))
+#             if(labels_present==1):
+#                 label_train_tmp=np.reshape(label_data_train[:,index_no,:],(1,img_size_x,img_size_z))
+#         else:
+#             img_train_tmp=np.reshape(image_data_train[index_no,:,:],(1,img_size_y,img_size_z,num_channels))
+#             if(labels_present==1):
+#                 label_train_tmp=np.reshape(label_data_train[index_no,:,:],(1,img_size_y,img_size_z))
 
-        if(count==0):
-            image_data_train_batch=img_train_tmp
-            if(labels_present==1):
-                label_data_train_batch=label_train_tmp
-        else:
-            image_data_train_batch=np.concatenate((image_data_train_batch, img_train_tmp),axis=0)
-            if(labels_present==1):
-                label_data_train_batch=np.concatenate((label_data_train_batch, label_train_tmp),axis=0)
-        count=count+1
-        if(count==batch_size):
-            break
+#         if(count==0):
+#             image_data_train_batch=img_train_tmp
+#             if(labels_present==1):
+#                 label_data_train_batch=label_train_tmp
+#         else:
+#             image_data_train_batch=np.concatenate((image_data_train_batch, img_train_tmp),axis=0)
+#             if(labels_present==1):
+#                 label_data_train_batch=np.concatenate((label_data_train_batch, label_train_tmp),axis=0)
+#         count=count+1
+#         if(count==batch_size):
+#             break
 
-    if(len(ip_list)==2 and labels_present==1):
-        return image_data_train_batch, label_data_train_batch
-    else:
-        return image_data_train_batch
+#     if(len(ip_list)==2 and labels_present==1):
+#         return image_data_train_batch, label_data_train_batch
+#     else:
+#         return image_data_train_batch
 
 def change_axis_img(ip_list, labels_present=1, def_axis_no=2, cat_axis=0):
     '''
