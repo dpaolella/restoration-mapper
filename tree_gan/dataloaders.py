@@ -196,7 +196,7 @@ class dataloaderObj:
         else:
             return cropped_img
 
-    def load_imgs(self, val=False, label_present=1):
+    def load_imgs(self, dataset= 'lab'):
         """
         # Load the training or validation images
         input params :
@@ -207,11 +207,20 @@ class dataloaderObj:
             mask_cat : corresponding stack of 3D segmentation masks of all the patient id nos.
         """
 
-        if val==True:
+        if dataset == 'val':
             img_type = 'val'
-        else:
+            label_present = 1
+        elif dataset == 'lab':
             img_type = 'lab'
+            label_present = 1
+        elif dataset == 'unlab':
+            img_type = 'unlab'
+            label_present = 0
+        else:
+            raise ValueError('invalid dataset type specified or data filename wrong')
 
+        #D: change path name to end in "large", ie: '_x_large.npy' and '_y_large.npy' vs '_x_mini.npy' and '_y_mini.npy'
+        # to use large dataset
         img_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_x_mini.npy'
         img_tmp=np.load(img_fname)
         if(label_present==1):
