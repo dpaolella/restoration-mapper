@@ -758,27 +758,31 @@ class modelObj:
 
 
     def intensity_transform_cgan_unet(self,learn_rate_gen=0.0001,learn_rate_disc=0.0001,z_lat_dim=100,lat_dim=128,beta1_val=0.9,\
-                     gan_type='gan',ra_en=True,learn_rate_seg=0.001,dsc_loss=1,en_1hot=0,lamda_dsc=1,lamda_adv=1,lamda_l1_i=0.001):
+                     gan_type='gan',ra_en=True,learn_rate_seg=0.001,dsc_loss=1,en_1hot=0,lamda_dsc=1,lamda_adv=1,lamda_l1_i=0.001,
+                     class_weights = tf.constant([[0.05, 0.95]],name='class_weights'), num_channels=1):
 
         no_filters=[1, 16, 32, 64, 128, 256]
 
-        if(self.num_classes==2):
-            class_weights = tf.constant([[0.05, 0.95]],name='class_weights')
-        elif(self.num_classes==3):
-            class_weights = tf.constant([[0.05, 0.5, 0.45]],name='class_weights')
-        elif(self.num_classes==4):
-            class_weights = tf.constant([[0.1, 0.3, 0.3, 0.3]],name='class_weights')
+        # if(self.num_classes==2):
+        #     class_weights = tf.constant([[0.05, 0.95]],name='class_weights')
+        # elif(self.num_classes==3):
+        #     class_weights = tf.constant([[0.05, 0.5, 0.45]],name='class_weights')
+        # elif(self.num_classes==4):
+        #     class_weights = tf.constant([[0.1, 0.3, 0.3, 0.3]],name='class_weights')
 
         std_init=0.01
         SEED=1
         acti='xavier'
         intl=tf.truncated_normal_initializer(stddev=std_init, seed=SEED)
 
-        hid_dim=int(self.img_size_x*self.img_size_y*no_filters[4]/(32*32))
-        latent_dim=lat_dim # 128 #or 512 / 128
+        #L: changing this to 2x2x64 to match ratio of dimension between generator input and lowest dimensionality in JB's UNet
+        hid_dim=int(self.img_size_x*self.img_size_y*no_filters[1]/(4*4))
+        latent_dim=lat_dim
 
-        z_hid_dim=int(self.img_size_x*self.img_size_y*no_filters[4]/(32*32))
-        dim_x = int(self.img_size_x/32)
+        #L: changing this to 2x2x64 to match ratio of dimension between generator input and lowest dimensionality in JB's UNet
+        z_hid_dim=int(self.img_size_x*self.img_size_y*no_filters[1]/(4*4))
+        #L: changing this to 2 for reasons above
+        dim_x = int(self.img_size_x/8)
 
         # Generator - FCN variables
         gen_c1_weights = tf.get_variable(name="gen_c1_weights",shape=[z_lat_dim,z_hid_dim], initializer=intl)
@@ -792,16 +796,21 @@ class modelObj:
         fcn_c3_weights = tf.get_variable(name="fcn_c3_weights",shape=[latent_dim,1], initializer=intl)
         fcn_c3_biases = tf.get_variable(name="fcn_c3_biases",shape=[1], initializer=tf.constant_initializer(value=0))
 
-        num_channels=no_filters[0]
         # Placeholders
         # input to the network
         z = tf.placeholder(tf.float32, shape=[self.batch_size, z_lat_dim], name='z')
         x = tf.placeholder(tf.float32, shape=[None, self.img_size_x, self.img_size_y, num_channels], name='x')
         x_unl = tf.placeholder(tf.float32, shape=[None, self.img_size_x, self.img_size_y, num_channels], name='x_unl')
+        
+        print("z: {}".format(z.shape))
+        print("x: {}".format(x.shape))
+        print("x_unl: {}".format(x_unl.shape))
+
+        #L: add -2
         if(en_1hot==1):
-            y_l = tf.placeholder(tf.float32, shape=[None, self.img_size_x, self.img_size_y,self.num_classes], name='y_l')
+            y_l = tf.placeholder(tf.float32, shape=[None, self.img_size_x-2, self.img_size_y-2,self.num_classes], name='y_l')
         else:
-            y_l = tf.placeholder(tf.int32, shape=[None, self.img_size_x, self.img_size_y], name='y_l')
+            y_l = tf.placeholder(tf.int32, shape=[None, self.img_size_x-2, self.img_size_y-2], name='y_l')
         select_mask = tf.placeholder(tf.bool, name='select_mask')
         train_phase = tf.placeholder(tf.bool, name='train_phase')
         if(en_1hot==0):
@@ -812,91 +821,133 @@ class modelObj:
         ############################################
         # Generator Network
         ############################################
+        #L: structure is mostly the same as the spatial generator cgan, copying over code...
         # Dense layer + Reshape to down sampled image dimensions
         gen_fcn_c1 = tf.matmul(z, gen_c1_weights) + gen_c1_biases
         gen_fcn_relu_c1 = tf.nn.relu(gen_fcn_c1)
-        gen_fcn_reshaped = tf.reshape(gen_fcn_relu_c1 ,[-1,dim_x,dim_x,no_filters[4]])
+        gen_fcn_reshaped = tf.reshape(gen_fcn_relu_c1 ,[-1,dim_x,dim_x,no_filters[3]])
+        print("Generator")
+        print("gen_fcn_c1: {}".format(gen_fcn_c1.shape))
+        print("gen_fcn_relu_c1: {}".format(gen_fcn_relu_c1.shape))
+        print("gen_fcn_reshaped: {}".format(gen_fcn_reshaped.shape))
 
-        # Level 5 - Upsample + Conv. op
+        # Level 5 - Upsampling layer + Conv. layer
         fs_de=2
         scale_val=2
         gen_up5 = layers.upsample_layer(ip_layer=gen_fcn_reshaped, method=self.interp_val, scale_factor=scale_val)
-        gen_c5 = layers.conv2d_layer(ip_layer=gen_up5,name='gen_c5', kernel_size=(fs_de,fs_de),num_filters=no_filters[4],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        gen_c5 = layers.conv2d_layer(ip_layer=gen_up5,name='gen_c5', kernel_size=(fs_de,fs_de),num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        print("gen_up5: {}".format(gen_up5.shape))
+        print("gen_c5: {}".format(gen_c5.shape))
 
         # Level 4
         gen_up4 = layers.upsample_layer(ip_layer=gen_c5, method=self.interp_val, scale_factor=scale_val)
-        gen_c4 = layers.conv2d_layer(ip_layer=gen_up4,name='gen_c4', kernel_size=(fs_de,fs_de),num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        gen_c4 = layers.conv2d_layer(ip_layer=gen_up4,name='gen_c4', kernel_size=(fs_de,fs_de),num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        print("gen_up4: {}".format(gen_up4.shape))
+        print("gen_c4: {}".format(gen_c4.shape))
 
         # Level 3
         gen_up3 = layers.upsample_layer(ip_layer=gen_c4, method=self.interp_val, scale_factor=scale_val)
-        gen_c3 = layers.conv2d_layer(ip_layer=gen_up3,name='gen_c3', kernel_size=(fs_de,fs_de),num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        gen_c3 = layers.conv2d_layer(ip_layer=gen_up3,name='gen_c3', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        print("gen_up3: {}".format(gen_up3.shape))
+        print("gen_c3: {}".format(gen_c3.shape))
 
         # Level 2
-        gen_up2 = layers.upsample_layer(ip_layer=gen_c3, method=self.interp_val, scale_factor=scale_val)
-        gen_c2 = layers.conv2d_layer(ip_layer=gen_up2,name='gen_c2', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #gen_up2 = layers.upsample_layer(ip_layer=gen_c3, method=self.interp_val, scale_factor=scale_val)
+        #gen_c2 = layers.conv2d_layer(ip_layer=gen_up2,name='gen_c2', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #print("gen_up2: {}".format(gen_up2.shape))
+        #print("gen_c2: {}".format(gen_c2.shape))
 
         # Level 1
-        gen_up1 = layers.upsample_layer(ip_layer=gen_c2, method=self.interp_val, scale_factor=scale_val)
-        gen_c1 = layers.conv2d_layer(ip_layer=gen_up1,name='gen_c1', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=False, use_batch_norm=False, training_phase=train_phase)
-
+        #gen_up1 = layers.upsample_layer(ip_layer=gen_c2, method=self.interp_val, scale_factor=scale_val)
+        #gen_c1 = layers.conv2d_layer(ip_layer=gen_up1,name='gen_c1', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=False, use_batch_norm=False, training_phase=train_phase)
+        #print("gen_up1: {}".format(gen_up1.shape))
+        #print("gen_c1: {}".format(gen_c1.shape))
 
         # Conv. ops on input image
-        conv_1a = layers.conv2d_layer(ip_layer=x,name='conv_1a',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        conv_1b = layers.conv2d_layer(ip_layer=conv_1a,name='conv_1b',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1a = layers.conv2d_layer(ip_layer=x,name='conv_1a',num_filters=32, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1b = layers.conv2d_layer(ip_layer=conv_1a,name='conv_1b',num_filters=64, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        print("conv_1a: {}".format(conv_1a.shape))
+        print("conv_1b: {}".format(conv_1b.shape))
 
         # Concatenate features obtained by conv. ops on image and on 'z'
-        gen_cat = tf.concat((gen_c1, conv_1b), axis=3)
+        gen_cat=tf.concat((gen_c3,conv_1b),axis=3)
+        print("gen_cat: {}".format(gen_cat.shape))
 
         # More Conv. ops on concatenated feature maps
-        conv_1c = layers.conv2d_layer(ip_layer=gen_cat,name='conv_1c',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        conv_1d = layers.conv2d_layer(ip_layer=conv_1c,name='conv_1d',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1c = layers.conv2d_layer(ip_layer=gen_cat,name='conv_1c',num_filters=32, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        conv_1d = layers.conv2d_layer(ip_layer=conv_1c,name='conv_1d',num_filters=16, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+
+        #L: they have conv_1e commented out for some reason... might be worth looking at
         #conv_1e = layers.conv2d_layer(ip_layer=conv_1d,name='conv_1e',num_filters=2, use_relu=False, use_batch_norm=False, training_phase=train_phase)
 
+        print("conv_1c: {}".format(conv_1c.shape))
+        print("conv_1d: {}".format(conv_1d.shape))
+
         # intensity maps to add to transformed image
-        int_c1 = layers.conv2d_layer(ip_layer=conv_1d, name='int_c1', kernel_size=(1, 1), num_filters=1,use_bias=False, use_relu=False, use_batch_norm=False, training_phase=train_phase)
+        #L: changing this to 16 filters, produces one intensity field for each channel of input data
+        #L: because this is now 16x16x16, might need to feed more dimensionality up front to train,
+        #L: much bigger than flow vector (16x16x2)
+        int_c1 = layers.conv2d_layer(ip_layer=conv_1d, name='int_c1', kernel_size=(1, 1), num_filters=16,use_bias=False, use_relu=False, use_batch_norm=False, training_phase=train_phase)
 
         # tanh activation function to restrict the values of delta I (additive transform)
         int_c1=tf.nn.tanh(int_c1)
+        print("int_c1: {}".format(int_c1.shape))
 
         # add intensity transform (int_c1) to the input image to yield intensity transformed image
         y_int = tf.add(x,int_c1)
+        print("y_int: {}".format(y_int.shape))
 
     ############################################
         #Discriminator Network
     ############################################
-
+    #L: also very similar in form to spatial generator cgan, copying relevant things over...
+        print("Discriminator")
         cat_disc_c1=tf.concat((y_int,x_unl),axis=0,name='cat_disc_c1')
+        print("cat_disc_c1: {}".format(cat_disc_c1.shape))
+
         # Choose between concate or true+gen images or gen images
         cat_disc_c1 = tf.cond(select_mask,lambda : cat_disc_c1, lambda :y_int)
 
         # DISC Net Architecutre
-        disc_c1 = layers.conv2d_layer(ip_layer=cat_disc_c1, name='disc_c1', num_filters=no_filters[1],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        #L: changing kernel size so we don't lose info so fast, have to increase number of filters as well
+        disc_c1 = layers.conv2d_layer(ip_layer=cat_disc_c1, name='disc_c1', num_filters=no_filters[2],kernel_size=(3, 3),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
         disc_c1 = tf.nn.leaky_relu(disc_c1, alpha=0.2)
+        print("disc_c1: {}".format(disc_c1.shape))
 
-        disc_c2 = layers.conv2d_layer(ip_layer=disc_c1, name='disc_c2', num_filters=no_filters[2],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        disc_c2 = layers.conv2d_layer(ip_layer=disc_c1, name='disc_c2', num_filters=no_filters[2],kernel_size=(3, 3),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
         disc_c2 = tf.nn.leaky_relu(disc_c2, alpha=0.2)
+        print("disc_c2: {}".format(disc_c2.shape))
 
-        disc_c3 = layers.conv2d_layer(ip_layer=disc_c2, name='disc_c3', num_filters=no_filters[3],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        
+        disc_c3 = layers.conv2d_layer(ip_layer=disc_c2, name='disc_c3', num_filters=no_filters[3],kernel_size=(3, 3),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
         disc_c3 = tf.nn.leaky_relu(disc_c3, alpha=0.2)
+        print("disc_c3: {}".format(disc_c3.shape))
 
-        disc_c4 = layers.conv2d_layer(ip_layer=disc_c3, name='disc_c4', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c4 = tf.nn.leaky_relu(disc_c4, alpha=0.2)
+        #L: at target dimensionality, don't need more
+        #disc_c4 = layers.conv2d_layer(ip_layer=disc_c3, name='disc_c4', num_filters=no_filters[4],kernel_size=(4, 4),strides=(1, 1),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        #disc_c4 = tf.nn.leaky_relu(disc_c4, alpha=0.2)
+        #print("disc_c4: {}".format(disc_c4.shape))
 
-        disc_c5 = layers.conv2d_layer(ip_layer=disc_c4, name='disc_c5', num_filters=no_filters[4],kernel_size=(5, 5),strides=(2, 2),use_relu=False, use_batch_norm=True, training_phase=train_phase)
-        disc_c5_pool = tf.nn.leaky_relu(disc_c5, alpha=0.2)
+        #disc_c5 = layers.conv2d_layer(ip_layer=disc_c4, name='disc_c5', num_filters=no_filters[4],kernel_size=(4, 4),strides=(1, 1),use_relu=False, use_batch_norm=True, training_phase=train_phase)
+        #disc_c5_pool = tf.nn.leaky_relu(disc_c5, alpha=0.2)
+        #print("disc_c5: {}".format(disc_c5.shape))
 
         # Flat conv for FCN
-        flat_conv = tf.contrib.layers.flatten(disc_c5_pool)
+        flat_conv = tf.contrib.layers.flatten(disc_c3)
+        print("flat_conv: {}".format(flat_conv.shape))
 
         # FCN + Relu - x2
         z_fcn_c1 = tf.matmul(flat_conv, fcn_c1_weights) + fcn_c1_biases
         z_fcn_relu_c1 = tf.nn.leaky_relu(z_fcn_c1)
+        print("z_fcn_relu_c1: {}".format(z_fcn_relu_c1.shape))
 
         z_fcn_c2 = tf.matmul(z_fcn_relu_c1, fcn_c2_weights) + fcn_c2_biases
         z_fcn_relu_c2 = tf.nn.leaky_relu(z_fcn_c2)
+        print("z_fcn_relu_c2: {}".format(z_fcn_relu_c2.shape))
 
         # 1 fully connected layer to determine input images into real / fake categories
         z_class = tf.matmul(z_fcn_relu_c2, fcn_c3_weights) + fcn_c3_biases
+        print("z_class: {}".format(z_class.shape))
 
         z_pred=z_class
         z_pred_cls=z_pred
@@ -927,88 +978,141 @@ class modelObj:
         ############################################
         # Encoder - Downsampling Path
         ############################################
+        #L: again, like spatial generator, copying relevant portions of code over
         # 2x 3x3 conv and 1 maxpool
         # Level 1
-        enc_c1_a = layers.conv2d_layer(ip_layer=x, name='enc_c1_a', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c1_b = layers.conv2d_layer(ip_layer=enc_c1_a, name='enc_c1_b', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c1_pool = layers.max_pool_layer2d(enc_c1_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME",name='enc_c1_pool')
+        #L: change # of filters
+        enc_c1_a = layers.conv2d_layer(ip_layer=x,name='enc_c1_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c1_b = layers.conv2d_layer(ip_layer=enc_c1_a, name='enc_c1_b', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c1_pool = layers.max_pool_layer2d(enc_c1_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c1_pool')
+        print("UNet Downsampling")
+        print("enc_c1_a: {}".format(enc_c1_a.shape))
+        print("enc_c1_b: {}".format(enc_c1_b.shape))
+        print("enc_c1_pool: {}".format(enc_c1_pool.shape))
+
 
         # Level 2
-        enc_c2_a = layers.conv2d_layer(ip_layer=enc_c1_pool, name='enc_c2_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c2_b = layers.conv2d_layer(ip_layer=enc_c2_a, name='enc_c2_b', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c2_pool = layers.max_pool_layer2d(enc_c2_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME",name='enc_c2_pool')
+        #L: change # of filters
+        enc_c2_a = layers.conv2d_layer(ip_layer=enc_c1_pool,name='enc_c2_a', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c2_b = layers.conv2d_layer(ip_layer=enc_c2_a, name='enc_c2_b', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c2_pool = layers.max_pool_layer2d(enc_c2_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c2_pool')
+        print("enc_c2_a: {}".format(enc_c2_a.shape))
+        print("enc_c2_b: {}".format(enc_c2_b.shape))
+        print("enc_c2_pool: {}".format(enc_c2_pool.shape))
 
         # Level 3
-        enc_c3_a = layers.conv2d_layer(ip_layer=enc_c2_pool, name='enc_c3_a', num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c3_b = layers.conv2d_layer(ip_layer=enc_c3_a, name='enc_c3_b', num_filters=no_filters[3], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        enc_c3_pool = layers.max_pool_layer2d(enc_c3_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME",name='enc_c3_pool')
+        enc_c3_a = layers.conv2d_layer(ip_layer=enc_c2_pool,name='enc_c3_a', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c3_b = layers.conv2d_layer(ip_layer=enc_c3_a, name='enc_c3_b', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #L: size mimics that of widest in JB's set
+        #L: at target dim, don't need to pool
+        #enc_c3_pool = layers.max_pool_layer2d(enc_c3_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c3_pool')
+        print("enc_c3_a: {}".format(enc_c3_a.shape))
+        print("enc_c3_b: {}".format(enc_c3_b.shape))
+        #print("enc_c3_pool: {}".format(enc_c3_pool.shape))
 
         # Level 4
-        enc_c4_a = layers.conv2d_layer(ip_layer=enc_c3_pool, name='enc_c4_a', num_filters=no_filters[4],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c4_b = layers.conv2d_layer(ip_layer=enc_c4_a, name='enc_c4_b', num_filters=no_filters[4], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        enc_c4_pool = layers.max_pool_layer2d(enc_c4_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME",name='enc_c4_pool')
+        #enc_c4_a = layers.conv2d_layer(ip_layer=enc_c3_pool,name='enc_c4_a', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #enc_c4_b = layers.conv2d_layer(ip_layer=enc_c4_a, name='enc_c4_b', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #enc_c4_pool = layers.max_pool_layer2d(enc_c4_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c4_pool')
+        #print("enc_c4_a: {}".format(enc_c4_a.shape))
+        #print("enc_c4_b: {}".format(enc_c4_b.shape))
+        #print("enc_c4_pool: {}".format(enc_c4_pool.shape))
 
         # Level 5 - 2x Conv
-        enc_c5_a = layers.conv2d_layer(ip_layer=enc_c4_pool, name='enc_c5_a', num_filters=no_filters[5],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c5_b = layers.conv2d_layer(ip_layer=enc_c5_a, name='enc_c5_b', num_filters=no_filters[5], use_relu=True,use_batch_norm=True, training_phase=train_phase)
+        #enc_c5_a = layers.conv2d_layer(ip_layer=enc_c4_pool,name='enc_c5_a', num_filters=no_filters[5], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #enc_c5_b = layers.conv2d_layer(ip_layer=enc_c5_a, name='enc_c5_b', num_filters=no_filters[5], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #print("enc_c5_a: {}".format(enc_c5_a.shape))
+        #print("enc_c5_b: {}".format(enc_c5_b.shape))
 
         ########################
         # Decoder - Upsampling Path
         ########################
-        # Upsample + 2x2 conv to half the no. of feature channels + SKIP connection (concate the conv. layers)
+       # Upsample + 2x2 conv to half the no. of feature channels + SKIP connection (concate the conv. layers)
         # Level 5 - 1 upsampling layer + 1 conv op. + skip connection + 2x conv op.
-        scale_val = 2
-        dec_up5 = layers.upsample_layer(ip_layer=enc_c5_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc5 = layers.conv2d_layer(ip_layer=dec_up5, name='dec_dc5', kernel_size=(fs_de, fs_de),num_filters=no_filters[4], use_relu=True, use_batch_norm=True,training_phase=train_phase)
-        dec_cat_c5 = tf.concat((dec_dc5, enc_c4_b), axis=3, name='dec_cat_c5')
+        scale_val=2
+        dec_up5 = layers.upsample_layer(ip_layer=enc_c3_b, method=self.interp_val, scale_factor=scale_val)
+        dec_dc5 = layers.conv2d_layer(ip_layer=dec_up5,name='dec_dc5', kernel_size=(fs_de,fs_de),num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_cat_c5 = tf.concat((dec_dc5,enc_c2_b),axis=3,name='dec_cat_c5')
+        print("UNet Upsampling")
+        print("dec_up5: {}".format(dec_up5.shape))
+        print("dec_dc5: {}".format(dec_dc5.shape))
+        print("dec_cat_c5: {}".format(dec_cat_c5.shape))
 
-        # Level 4
-        dec_c4_a = layers.conv2d_layer(ip_layer=dec_cat_c5, name='dec_c4_a', num_filters=no_filters[4],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        dec_c4_b = layers.conv2d_layer(ip_layer=dec_c4_a, name='dec_c4_b', num_filters=no_filters[4], use_relu=True,use_batch_norm=True, training_phase=train_phase)
+        #Level 4
+        dec_c4_a = layers.conv2d_layer(ip_layer=dec_cat_c5,name='dec_c4_a', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_c4_b = layers.conv2d_layer(ip_layer=dec_c4_a,name='dec_c4_b', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
         dec_up4 = layers.upsample_layer(ip_layer=dec_c4_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc4 = layers.conv2d_layer(ip_layer=dec_up4, name='dec_dc4', kernel_size=(fs_de, fs_de),num_filters=no_filters[3], use_relu=True, use_batch_norm=True,training_phase=train_phase)
-        dec_cat_c4 = tf.concat((dec_dc4, enc_c3_b), axis=3, name='dec_cat_c4')
+        dec_dc4 = layers.conv2d_layer(ip_layer=dec_up4,name='dec_dc4', kernel_size=(fs_de,fs_de),num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_cat_c4 = tf.concat((dec_dc4,enc_c1_b),axis=3,name='dec_cat_c4')
+        print("dec_c4_a: {}".format(dec_c4_a.shape))
+        print("dec_c4_b: {}".format(dec_c4_b.shape))
+        print("dec_up4: {}".format(dec_up4.shape))
+        print("dec_dc4: {}".format(dec_dc4.shape))
+        print("dec_cat_c4: {}".format(dec_cat_c4.shape))
 
-        # Level 3 -
-        dec_c3_a = layers.conv2d_layer(ip_layer=dec_cat_c4, name='dec_c3_a', num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        dec_c3_b = layers.conv2d_layer(ip_layer=dec_c3_a, name='dec_c3_b', num_filters=no_filters[3], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        dec_up3 = layers.upsample_layer(ip_layer=dec_c3_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc3 = layers.conv2d_layer(ip_layer=dec_up3, name='dec_dc3', kernel_size=(fs_de, fs_de),num_filters=no_filters[2], use_relu=True, use_batch_norm=True,training_phase=train_phase)
-        dec_cat_c3 = tf.concat((dec_dc3, enc_c2_b), axis=3, name='dec_cat_c3')
+        #Level 3
+        #dec_c3_a = layers.conv2d_layer(ip_layer=dec_cat_c4,name='dec_c3_a', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_c3_b = layers.conv2d_layer(ip_layer=dec_c3_a,name='dec_c3_b', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_up3 = layers.upsample_layer(ip_layer=dec_c3_b, method=self.interp_val, scale_factor=scale_val)
+        #dec_dc3 = layers.conv2d_layer(ip_layer=dec_up3,name='dec_dc3', kernel_size=(fs_de,fs_de),num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_cat_c3 = tf.concat((dec_dc3,enc_c2_b),axis=3,name='dec_cat_c3')
+        #print("dec_c3_a: {}".format(dec_c3_a.shape))
+        #print("dec_c3_b: {}".format(dec_c3_b.shape))
+        #print("dec_up3: {}".format(dec_up3.shape))
+        #print("dec_dc3: {}".format(dec_dc3.shape))
+        #print("dec_cat_c3: {}".format(dec_cat_c3.shape))
 
-        # Level 2 -
-        dec_c2_a = layers.conv2d_layer(ip_layer=dec_cat_c3, name='dec_c2_a', num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        dec_c2_b = layers.conv2d_layer(ip_layer=dec_c2_a, name='dec_c2_b', num_filters=no_filters[2], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        dec_up2 = layers.upsample_layer(ip_layer=dec_c2_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc2 = layers.conv2d_layer(ip_layer=dec_up2, name='dec_dc2', kernel_size=(fs_de, fs_de),num_filters=no_filters[1], use_relu=True, use_batch_norm=True,training_phase=train_phase)
-        dec_cat_c2 = tf.concat((dec_dc2, enc_c1_b), axis=3, name='dec_cat_c2')
+        #Level 2
+        #dec_c2_a = layers.conv2d_layer(ip_layer=dec_cat_c3,name='dec_c2_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_c2_b = layers.conv2d_layer(ip_layer=dec_c2_a,name='dec_c2_b', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_up2 = layers.upsample_layer(ip_layer=dec_c2_b, method=self.interp_val, scale_factor=scale_val)
+        #dec_dc2 = layers.conv2d_layer(ip_layer=dec_up2,name='dec_dc2', kernel_size=(fs_de,fs_de),num_filters=no_filters[1],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        #dec_cat_c2 = tf.concat((dec_dc2,enc_c1_b),axis=3,name='dec_cat_c2')
+        #print("dec_c2_a: {}".format(dec_c2_a.shape))
+        #print("dec_c2_b: {}".format(dec_c2_b.shape))
+        #print("dec_up2: {}".format(dec_up2.shape))
+        #print("dec_dc2: {}".format(dec_dc2.shape))
+        #print("dec_cat_c2: {}".format(dec_cat_c2.shape))
 
         # Level 1 - multiple conv ops.
-        dec_c1_a = layers.conv2d_layer(ip_layer=dec_cat_c2, name='dec_c1_a', num_filters=no_filters[1],use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        seg_c1_a = layers.conv2d_layer(ip_layer=dec_c1_a, name='seg_c1_a', num_filters=no_filters[1], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        seg_c1_b = layers.conv2d_layer(ip_layer=seg_c1_a, name='seg_c1_b', num_filters=no_filters[1], use_relu=True,use_batch_norm=True, training_phase=train_phase)
-        seg_c1_c = layers.conv2d_layer(ip_layer=seg_c1_b, name='seg_c1_c', num_filters=no_filters[1], use_relu=True,use_batch_norm=True, training_phase=train_phase)
+        #L: change filter sizes to have smoother transition
+        dec_c1_a = layers.conv2d_layer(ip_layer=dec_cat_c4,name='dec_c1_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_a = layers.conv2d_layer(ip_layer=dec_c1_a,name='seg_c1_a',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_b = layers.conv2d_layer(ip_layer=seg_c1_a,name='seg_c1_b', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_c = layers.conv2d_layer(ip_layer=seg_c1_b,name='seg_c1_c', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        print("dec_c1_a: {}".format(dec_c1_a.shape))
+        print("seg_c1_a: {}".format(seg_c1_a.shape))
+        print("seg_c1_b: {}".format(seg_c1_b.shape))
+        print("seg_c1_c: {}".format(seg_c1_c.shape))
 
         # Final output layer - Logits before softmax
-        seg_fin_layer = layers.conv2d_layer(ip_layer=seg_c1_c, name='seg_fin_layer', num_filters=self.num_classes,use_relu=False, use_batch_norm=False, training_phase=train_phase)
+        # add valid padding to get down to 14x14
+        seg_fin_layer = layers.conv2d_layer(ip_layer=seg_c1_c,name='seg_fin_layer', num_filters=self.num_classes, padding = "VALID",use_relu=False, use_batch_norm=False, training_phase=train_phase)
+        print("seg_fin_layer: {}".format(seg_fin_layer.shape))
 
         # Predict Class
         y_pred = tf.nn.softmax(seg_fin_layer)
-        y_pred_cls = tf.argmax(y_pred, axis=3)
+        y_pred_cls = tf.argmax(y_pred,axis=3)
+        print("y_pred: {}".format(y_pred.shape))
+        print("y_pred_cls: {}".format(y_pred_cls.shape))
 
         ########################
+        #L: writing over Dani's changes tot he weights in these functions
         # Simple Cross Entropy (CE) between predicted labels and true labels - for only labelled data
         if(dsc_loss==1):
             # For dice score loss function
             #without background
             seg_cost = loss.dice_loss_without_backgrnd(logits=seg_fin_layer, labels=y_l_onehot)
-            seg_cost_wgtce=seg_cost
+            #D: this seems like a totally unnecessary re-assignment of the variable here and is confusing
+            seg_cost_wgtce = seg_cost
             #with background
             #seg_cost = dice_loss_with_backgrnd(logits=seg_fin_layer, labels=y_l_onehot)
         else:
             # For Weighted CE loss function
-            seg_cost = loss.pixel_wise_cross_entropy_loss_weighted(logits=seg_fin_layer, labels=y_l_onehot, class_weights=class_weights)
-            seg_cost_wgtce=seg_cost
+            #seg_cost = loss.pixel_wise_cross_entropy_loss_weighted(logits=seg_fin_layer, labels=y_l_onehot, class_weights=class_weights)
+            seg_cost = loss.pixel_wise_cross_entropy_loss(logits=seg_fin_layer, labels=y_l_onehot)
+            #D: this seems like a totally unnecessary re-assignment of the variable here and is confusing
+            seg_cost_wgtce = seg_cost
 
         # get the var list for Segmentation Network
         seg_net_vars = []
@@ -1021,7 +1125,9 @@ class modelObj:
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            cost_a1=-lamda_l1_i*tf.reduce_mean(tf.abs(int_c1)) + lamda_adv*tf.reduce_mean(g_cost)
+            #L: adding tf.flatten to int_c1 as it is now 16x16x16 instead of 16x16x1, mimicing what was done with the flow vec which was also 3d
+            #L: do you guys get why this needs to be flattened? would be nice to have an explanation
+            cost_a1=-lamda_l1_i*tf.reduce_mean(tf.abs(tf.layers.flatten(int_c1))) + lamda_adv*tf.reduce_mean(g_cost)
             cost_a1_seg=cost_a1+lamda_dsc*tf.reduce_mean(seg_cost_wgtce)
 
             optimizer_l2_gen = tf.train.AdamOptimizer(learning_rate=learn_rate_gen,beta1=beta1_val).minimize(cost_a1, var_list=gen_net_vars)
@@ -1057,9 +1163,9 @@ class modelObj:
         val_totalc_sum= tf.summary.scalar('val_totalc_', val_totalc)
         val_summary = tf.summary.merge([val_totalc_sum])
 
-
+        #L: adding "cost_a1_seg", was missing
         return {'x': x, 'z':z, 'y_l':y_l, 'train_phase':train_phase, 'seg_cost': seg_cost,\
-                'x_unl':x_unl,'select_mask': select_mask,'z_cost':cost_a2,'g_cost':cost_a1,'g_net_cost':cost_a1_seg,\
+                'x_unl':x_unl,'select_mask': select_mask,'z_cost':cost_a2,'g_cost':cost_a1,'cost_a1_seg': cost_a1_seg,'g_net_cost':cost_a1_seg,\
                 'y_pred' : y_pred, 'y_pred_cls': y_pred_cls,\
                 'train_summary':train_summary,'z_class':z_class,'z_pred':z_pred,'z_pred_cls':z_pred_cls,\
                 'optimizer_disc':optimizer_disc,'optimizer_l2_gen':optimizer_l2_gen,'optimizer_unet_seg' :optimizer_unet_seg, \
