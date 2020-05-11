@@ -221,10 +221,10 @@ class dataloaderObj:
 
         #D: change path name to end in "large", ie: '_x_large.npy' and '_y_large.npy' vs '_x_mini.npy' and '_y_mini.npy'
         # to use large dataset
-        img_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_x_mini.npy'
+        img_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_x_large2.npy'
         img_tmp=np.load(img_fname)
         if(label_present==1):
-            mask_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_y_mini.npy'
+            mask_fname = str(self.data_path_tr_cropped)+'/' + img_type + '_y_large2.npy'
             mask_tmp=np.load(mask_fname)
 
         if(label_present==1):
