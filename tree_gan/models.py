@@ -561,8 +561,9 @@ class modelObj:
         # 2x 3x3 conv and 1 maxpool
         # Level 1
         #L: change # of filters
-        enc_c1_a = layers.conv2d_layer(ip_layer=x,name='enc_c1_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c1_b = layers.conv2d_layer(ip_layer=enc_c1_a, name='enc_c1_b', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        # no_filters=[1, 16, 32, 64, 128, 256]
+        enc_c1_a = layers.conv2d_layer(ip_layer=x,name='enc_c1_a', num_filters=64, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c1_b = layers.conv2d_layer(ip_layer=enc_c1_a, name='enc_c1_b', num_filters=64, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         enc_c1_pool = layers.max_pool_layer2d(enc_c1_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c1_pool')
         print("UNet Downsampling")
         print("enc_c1_a: {}".format(enc_c1_a.shape))
@@ -572,16 +573,16 @@ class modelObj:
 
         # Level 2
         #L: change # of filters
-        enc_c2_a = layers.conv2d_layer(ip_layer=enc_c1_pool,name='enc_c2_a', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c2_b = layers.conv2d_layer(ip_layer=enc_c2_a, name='enc_c2_b', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c2_a = layers.conv2d_layer(ip_layer=enc_c1_pool,name='enc_c2_a', num_filters=128, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c2_b = layers.conv2d_layer(ip_layer=enc_c2_a, name='enc_c2_b', num_filters=128, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         enc_c2_pool = layers.max_pool_layer2d(enc_c2_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c2_pool')
         print("enc_c2_a: {}".format(enc_c2_a.shape))
         print("enc_c2_b: {}".format(enc_c2_b.shape))
         print("enc_c2_pool: {}".format(enc_c2_pool.shape))
 
         # Level 3
-        enc_c3_a = layers.conv2d_layer(ip_layer=enc_c2_pool,name='enc_c3_a', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        enc_c3_b = layers.conv2d_layer(ip_layer=enc_c3_a, name='enc_c3_b', num_filters=no_filters[4], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c3_a = layers.conv2d_layer(ip_layer=enc_c2_pool,name='enc_c3_a', num_filters=256, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        enc_c3_b = layers.conv2d_layer(ip_layer=enc_c3_a, name='enc_c3_b', num_filters=256, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         #L: size mimics that of widest in JB's set
         #L: at target dim, don't need to pool
         #enc_c3_pool = layers.max_pool_layer2d(enc_c3_b, kernel_size=(2, 2), strides=(2, 2), padding="SAME", name='enc_c3_pool')
@@ -610,7 +611,7 @@ class modelObj:
         # Level 5 - 1 upsampling layer + 1 conv op. + skip connection + 2x conv op.
         scale_val=2
         dec_up5 = layers.upsample_layer(ip_layer=enc_c3_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc5 = layers.conv2d_layer(ip_layer=dec_up5,name='dec_dc5', kernel_size=(fs_de,fs_de),num_filters=no_filters[3],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_dc5 = layers.conv2d_layer(ip_layer=dec_up5,name='dec_dc5', kernel_size=(fs_de,fs_de),num_filters=128,use_relu=True, use_batch_norm=True, training_phase=train_phase)
         dec_cat_c5 = tf.concat((dec_dc5,enc_c2_b),axis=3,name='dec_cat_c5')
         print("UNet Upsampling")
         print("dec_up5: {}".format(dec_up5.shape))
@@ -618,10 +619,10 @@ class modelObj:
         print("dec_cat_c5: {}".format(dec_cat_c5.shape))
 
         #Level 4
-        dec_c4_a = layers.conv2d_layer(ip_layer=dec_cat_c5,name='dec_c4_a', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        dec_c4_b = layers.conv2d_layer(ip_layer=dec_c4_a,name='dec_c4_b', num_filters=no_filters[3], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_c4_a = layers.conv2d_layer(ip_layer=dec_cat_c5,name='dec_c4_a', num_filters=128, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_c4_b = layers.conv2d_layer(ip_layer=dec_c4_a,name='dec_c4_b', num_filters=128, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         dec_up4 = layers.upsample_layer(ip_layer=dec_c4_b, method=self.interp_val, scale_factor=scale_val)
-        dec_dc4 = layers.conv2d_layer(ip_layer=dec_up4,name='dec_dc4', kernel_size=(fs_de,fs_de),num_filters=no_filters[2],use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_dc4 = layers.conv2d_layer(ip_layer=dec_up4,name='dec_dc4', kernel_size=(fs_de,fs_de),num_filters=64,use_relu=True, use_batch_norm=True, training_phase=train_phase)
         dec_cat_c4 = tf.concat((dec_dc4,enc_c1_b),axis=3,name='dec_cat_c4')
         print("dec_c4_a: {}".format(dec_c4_a.shape))
         print("dec_c4_b: {}".format(dec_c4_b.shape))
@@ -655,10 +656,10 @@ class modelObj:
 
         # Level 1 - multiple conv ops.
         #L: change filter sizes to have smoother transition
-        dec_c1_a = layers.conv2d_layer(ip_layer=dec_cat_c4,name='dec_c1_a', num_filters=no_filters[2], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        seg_c1_a = layers.conv2d_layer(ip_layer=dec_c1_a,name='seg_c1_a',num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        seg_c1_b = layers.conv2d_layer(ip_layer=seg_c1_a,name='seg_c1_b', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
-        seg_c1_c = layers.conv2d_layer(ip_layer=seg_c1_b,name='seg_c1_c', num_filters=no_filters[1], use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        dec_c1_a = layers.conv2d_layer(ip_layer=dec_cat_c4,name='dec_c1_a', num_filters=64, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_a = layers.conv2d_layer(ip_layer=dec_c1_a,name='seg_c1_a',num_filters=32, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_b = layers.conv2d_layer(ip_layer=seg_c1_a,name='seg_c1_b', num_filters=16, use_relu=True, use_batch_norm=True, training_phase=train_phase)
+        seg_c1_c = layers.conv2d_layer(ip_layer=seg_c1_b,name='seg_c1_c', num_filters=16, use_relu=True, use_batch_norm=True, training_phase=train_phase)
         print("dec_c1_a: {}".format(dec_c1_a.shape))
         print("seg_c1_a: {}".format(seg_c1_a.shape))
         print("seg_c1_b: {}".format(seg_c1_b.shape))
